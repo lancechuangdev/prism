@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build and generated output
+dist/
+build/
+bundle/
+artifacts/
+cache/
+types/
+coverage/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Test and tooling output
+.gas-snapshot
+snapshots/
+
+# Local operating-system files
+.DS_Store
+Thumbs.db
+
+# Local editor settings
+.vscode/
