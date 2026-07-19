@@ -17,7 +17,7 @@ async function expectRevert(action, message) {
   assert.fail(`Expected transaction to revert with "${message}"`);
 }
 
-describe("token and oracle", function () {
+describe("Position Token", function () {
   let owner;
   let alice;
   let bob;
