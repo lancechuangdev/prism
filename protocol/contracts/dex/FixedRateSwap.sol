@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
 interface IERC20RouterLike {
     function transfer(address to, uint256 amount) external returns (bool);

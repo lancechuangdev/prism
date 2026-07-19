@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
 // Asset tokens for lending and borrowing, for example:
 // lendToken (stablecoins): USDT / USDC / BUSD
