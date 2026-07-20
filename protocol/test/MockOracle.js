@@ -1,11 +1,7 @@
-import assert from "node:assert/strict";
+import { expect } from "chai";
 import { network } from "hardhat";
 
 const { ethers } = await network.create();
-
-async function expectRevert(action, message) {
-  await assert.rejects(action, (error) => error.message.includes(message));
-}
 
 describe("Mock Oracle", function () {
   let busd;
@@ -21,48 +17,41 @@ describe("Mock Oracle", function () {
     await oracle.waitForDeployment();
   });
 
-  describe("MockOracle", function () {
-    it("lets the owner set and read one asset price", async function () {
-      await oracle.setPrice(busd.address, 100000000);
+  it("lets the owner set and read one asset price", async function () {
+    await oracle.setPrice(busd.address, 100000000);
 
-      assert.equal(await oracle.getPrice(busd.address), 100000000n);
-      await expectRevert(
-        oracle.getPrice(btc.address),
-        "Price not set for this token",
-      );
-    });
+    expect(await oracle.getPrice(busd.address)).to.equal(100000000n);
+    await expect(oracle.getPrice(btc.address)).to.be.revertedWith(
+      "Price not set for this token",
+    );
+  });
 
-    it("sets batch prices by asset address", async function () {
-      await oracle.setPrices(
-        [busd.address, btc.address],
-        [100000000, 5000000000000],
-      );
+  it("sets batch prices by asset address", async function () {
+    await oracle.setPrices(
+      [busd.address, btc.address],
+      [100000000, 5000000000000],
+    );
 
-      assert.equal(await oracle.getPrice(busd.address), 100000000n);
-      assert.equal(await oracle.getPrice(btc.address), 5000000000000n);
+    expect(await oracle.getPrice(busd.address)).to.equal(100000000n);
+    expect(await oracle.getPrice(btc.address)).to.equal(5000000000000n);
 
-      const prices = await oracle.getPrices([busd.address, btc.address]);
-      assert.equal(prices[0], 100000000n);
-      assert.equal(prices[1], 5000000000000n);
-    });
+    const prices = await oracle.getPrices([busd.address, btc.address]);
+    expect(prices[0]).to.equal(100000000n);
+    expect(prices[1]).to.equal(5000000000000n);
+  });
 
-    it("blocks non-owners and invalid prices", async function () {
-      await expectRevert(
-        oracle.connect(alice).setPrice(busd.address, 100000000),
-        "Not the owner",
-      );
-      await expectRevert(
-        oracle.setPrice(ethers.ZeroAddress, 100000000),
-        "Invalid token address",
-      );
-      await expectRevert(
-        oracle.setPrice(busd.address, 0),
-        "Price must be positive",
-      );
-      await expectRevert(
-        oracle.setPrices([busd.address], [100000000, 5000000000000]),
-        "Mismatched array lengths",
-      );
-    });
+  it("blocks non-owners and invalid prices", async function () {
+    await expect(
+      oracle.connect(alice).setPrice(busd.address, 100000000),
+    ).to.be.revertedWith("Not the owner");
+    await expect(
+      oracle.setPrice(ethers.ZeroAddress, 100000000),
+    ).to.be.revertedWith("Invalid token address");
+    await expect(oracle.setPrice(busd.address, 0)).to.be.revertedWith(
+      "Price must be positive",
+    );
+    await expect(
+      oracle.setPrices([busd.address], [100000000, 5000000000000]),
+    ).to.be.revertedWith("Mismatched array lengths");
   });
 });

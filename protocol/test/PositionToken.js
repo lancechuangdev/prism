@@ -1,21 +1,7 @@
-import assert from "node:assert/strict";
+import { expect } from "chai";
 import { network } from "hardhat";
 
 const { ethers } = await network.create();
-
-async function expectRevert(action, message) {
-  try {
-    await action;
-  } catch (error) {
-    assert.ok(
-      error.message.includes(message),
-      `Expected revert message "${message}", got "${error.message}"`,
-    );
-    return;
-  }
-
-  assert.fail(`Expected transaction to revert with "${message}"`);
-}
 
 describe("Position Token", function () {
   let owner;
@@ -39,77 +25,80 @@ describe("Position Token", function () {
     await borrowerPositionToken.waitForDeployment();
   });
 
-  describe("PositionToken", function () {
-    it("starts with ERC20 metadata and zero supply", async function () {
-      assert.equal(await lenderPositionToken.name(), "Lending BUSD");
-      assert.equal(await lenderPositionToken.symbol(), "lBUSD");
-      assert.equal(await lenderPositionToken.decimals(), 18n);
-      assert.equal(await lenderPositionToken.totalSupply(), 0n);
-    });
+  it("starts with ERC20 metadata and zero supply", async function () {
+    expect(await lenderPositionToken.name()).to.equal("Lending BUSD");
+    expect(await lenderPositionToken.symbol()).to.equal("lBUSD");
+    expect(await lenderPositionToken.decimals()).to.equal(18n);
+    expect(await lenderPositionToken.totalSupply()).to.equal(0n);
+  });
 
-    it("lets the owner add and remove minters", async function () {
-      assert.equal(await lenderPositionToken.isMinter(alice.address), false);
+  it("lets the owner add and remove minters", async function () {
+    expect(await lenderPositionToken.isMinter(alice.address)).to.equal(false);
 
-      await lenderPositionToken.setMinter(alice.address, true);
+    await lenderPositionToken.setMinter(alice.address, true);
 
-      assert.equal(await lenderPositionToken.isMinter(alice.address), true);
+    expect(await lenderPositionToken.isMinter(alice.address)).to.equal(true);
 
-      await lenderPositionToken.setMinter(alice.address, false);
+    await lenderPositionToken.setMinter(alice.address, false);
 
-      assert.equal(await lenderPositionToken.isMinter(alice.address), false);
-    });
+    expect(await lenderPositionToken.isMinter(alice.address)).to.equal(false);
+  });
 
-    it("blocks non-owners from managing minters", async function () {
-      await expectRevert(
-        lenderPositionToken.connect(alice).setMinter(alice.address, true),
+  it("blocks non-owners from managing minters", async function () {
+    await expect(
+      lenderPositionToken.connect(alice).setMinter(alice.address, true),
+    )
+      .to.be.revertedWithCustomError(
+        lenderPositionToken,
         "OwnableUnauthorizedAccount",
-      );
-      await expectRevert(
-        lenderPositionToken.connect(alice).setMinter(owner.address, false),
+      )
+      .withArgs(alice.address);
+    await expect(
+      lenderPositionToken.connect(alice).setMinter(owner.address, false),
+    )
+      .to.be.revertedWithCustomError(
+        lenderPositionToken,
         "OwnableUnauthorizedAccount",
-      );
-    });
+      )
+      .withArgs(alice.address);
+  });
 
-    it("lets minters mint and burn receipt tokens", async function () {
-      await lenderPositionToken.setMinter(alice.address, true);
+  it("lets minters mint and burn receipt tokens", async function () {
+    await lenderPositionToken.setMinter(alice.address, true);
 
-      await lenderPositionToken.connect(alice).mint(bob.address, 1000);
-      assert.equal(await lenderPositionToken.balanceOf(bob.address), 1000n);
-      assert.equal(await lenderPositionToken.totalSupply(), 1000n);
+    await lenderPositionToken.connect(alice).mint(bob.address, 1000);
+    expect(await lenderPositionToken.balanceOf(bob.address)).to.equal(1000n);
+    expect(await lenderPositionToken.totalSupply()).to.equal(1000n);
 
-      await lenderPositionToken.connect(alice).burn(bob.address, 400);
-      assert.equal(await lenderPositionToken.balanceOf(bob.address), 600n);
-      assert.equal(await lenderPositionToken.totalSupply(), 600n);
-    });
+    await lenderPositionToken.connect(alice).burn(bob.address, 400);
+    expect(await lenderPositionToken.balanceOf(bob.address)).to.equal(600n);
+    expect(await lenderPositionToken.totalSupply()).to.equal(600n);
+  });
 
-    it("blocks accounts that are not minters from minting or burning", async function () {
-      await expectRevert(
-        borrowerPositionToken.connect(alice).mint(bob.address, 1000),
-        "caller is not minter",
-      );
-      await expectRevert(
-        borrowerPositionToken.connect(alice).burn(bob.address, 1000),
-        "caller is not minter",
-      );
-    });
+  it("blocks accounts that are not minters from minting or burning", async function () {
+    await expect(
+      borrowerPositionToken.connect(alice).mint(bob.address, 1000),
+    ).to.be.revertedWith("caller is not minter");
+    await expect(
+      borrowerPositionToken.connect(alice).burn(bob.address, 1000),
+    ).to.be.revertedWith("caller is not minter");
+  });
 
-    it("supports normal ERC20 transfer and allowance behavior", async function () {
-      await lenderPositionToken.setMinter(owner.address, true);
-      await lenderPositionToken.mint(alice.address, 1000);
+  it("supports normal ERC20 transfer and allowance behavior", async function () {
+    await lenderPositionToken.setMinter(owner.address, true);
+    await lenderPositionToken.mint(alice.address, 1000);
 
-      await lenderPositionToken.connect(alice).transfer(bob.address, 250);
-      assert.equal(await lenderPositionToken.balanceOf(alice.address), 750n);
-      assert.equal(await lenderPositionToken.balanceOf(bob.address), 250n);
+    await lenderPositionToken.connect(alice).transfer(bob.address, 250);
+    expect(await lenderPositionToken.balanceOf(alice.address)).to.equal(750n);
+    expect(await lenderPositionToken.balanceOf(bob.address)).to.equal(250n);
 
-      await lenderPositionToken.connect(alice).approve(owner.address, 300);
-      await lenderPositionToken.transferFrom(alice.address, bob.address, 300);
+    await lenderPositionToken.connect(alice).approve(owner.address, 300);
+    await lenderPositionToken.transferFrom(alice.address, bob.address, 300);
 
-      assert.equal(await lenderPositionToken.balanceOf(alice.address), 450n);
-      assert.equal(await lenderPositionToken.balanceOf(bob.address), 550n);
-      assert.equal(
-        await lenderPositionToken.allowance(alice.address, owner.address),
-        0n,
-      );
-    });
+    expect(await lenderPositionToken.balanceOf(alice.address)).to.equal(450n);
+    expect(await lenderPositionToken.balanceOf(bob.address)).to.equal(550n);
+    expect(
+      await lenderPositionToken.allowance(alice.address, owner.address),
+    ).to.equal(0n);
   });
 });

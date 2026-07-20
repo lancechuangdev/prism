@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "hardhat test",
+    "test": "hardhat test --build-profile production",
     "format": "prettier --write ."
   },
   "keywords": [],
