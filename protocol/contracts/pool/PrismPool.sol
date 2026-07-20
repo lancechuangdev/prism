@@ -313,7 +313,7 @@ contract PrismPool {
         return data.settleAmountBorrow + interest;
     }
 
-    function isLiquidatable(uint256 poolId) public view returns (bool) {
+    function isUndercollateralized(uint256 poolId) public view returns (bool) {
         require(poolId < pools.length, "Invalid pool ID");
 
         PoolBaseInfo storage pool = pools[poolId];
@@ -331,7 +331,7 @@ contract PrismPool {
         uint256 collateralValueInLend = (data.settleAmountBorrow * borrowToLendRatio) / PRICE_SCALE;
         uint256 liquidationThreshold = (data.settleAmountLend * (RATE_SCALE + pool.liquidateRate)) / RATE_SCALE;
 
-        return collateralValueInLend > liquidationThreshold;
+        return collateralValueInLend < liquidationThreshold;
     }
 
     function depositLend(uint256 poolId, uint256 amount)
@@ -383,7 +383,7 @@ contract PrismPool {
         emit DepositBorrow(msg.sender, poolId, pool.collateralToken, amount);
     }
 
-    function settle(uint256 poolId) external whenNotPaused isState(poolId, PoolState.FUNDING) afterSettle(poolId) {
+    function settle(uint256 poolId) external onlyOwner whenNotPaused isState(poolId, PoolState.FUNDING) afterSettle(poolId) {
         require(poolId < pools.length, "Invalid pool ID");
 
         PoolBaseInfo storage pool = pools[poolId];
@@ -560,7 +560,7 @@ contract PrismPool {
     {
         require(poolId < pools.length, "Invalid pool ID");
         require(dexSwap != address(0), "Dex swap not available");
-        require(isLiquidatable(poolId), "Pool not liquidatable");
+        require(isUndercollateralized(poolId), "Pool is sufficiently collateralized");
 
         PoolBaseInfo storage pool = pools[poolId];
         PoolDataInfo storage data = poolData[poolId];
@@ -619,7 +619,6 @@ contract PrismPool {
     {
         require(poolId < pools.length, "Invalid pool ID");
         require(lenderPosition > 0, "No lender position");
-        require(isLiquidatable(poolId), "Pool not liquidatable");
 
         PoolBaseInfo storage pool = pools[poolId];
         PoolDataInfo storage data = poolData[poolId];
