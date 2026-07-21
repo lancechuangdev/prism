@@ -74,7 +74,39 @@ cd backend
 go test ./...
 ```
 
-## Step 3: Read-only API
+## Step 3: Pool and token Read-only API
+- Expose the pools and tokens read-only API and keep route handlers thin: parse `chainId`, call the repository, return JSON.
+- Serve data from the repository interface instead of hardcoding storage details into the HTTP layer.
+- Use seeded memory data until the contract reader and MySQL store are added.
+
+Files:
+- `internal/httpserver/server.go`
+- `internal/httpserver/server_test.go`
+- `internal/store/seed.go`
+- `internal/config/config.go`
+- `cmd/api/main.go`
+
+Run:
+
+```bash
+cd backend
+PRISM_ENV=local PRISM_API_VERSION=1 PRISM_API_PORT=8080 go run ./cmd/api
+```
+
+Then query:
+
+```bash
+curl "http://localhost:8080/api/v1/poolBaseInfo?chainId=97"
+curl "http://localhost:8081/api/v1/poolDataInfo?chainId=97"
+curl "http://localhost:8080/api/v1/token?chainId=97"
+```
+
+Run Go Tests:
+
+```bash
+cd backend
+go test ./...
+```
 
 ## Step 4: Contract reader
 

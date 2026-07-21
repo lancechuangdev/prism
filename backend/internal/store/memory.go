@@ -8,19 +8,19 @@ import (
 )
 
 type MemoryStore struct {
-	mu sync.RWMutex
+	mu       sync.RWMutex
 	poolBase map[PoolKey]PoolBase
 	poolData map[PoolKey]PoolData
-	tokens map[TokenKey]TokenInfo
-	now func() time.Time
+	tokens   map[TokenKey]TokenInfo
+	now      func() time.Time
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		poolBase: make(map[PoolKey]PoolBase),
 		poolData: make(map[PoolKey]PoolData),
-		tokens: make(map[TokenKey]TokenInfo),
-		now: time.Now,
+		tokens:   make(map[TokenKey]TokenInfo),
+		now:      time.Now,
 	}
 }
 
@@ -85,6 +85,24 @@ func (s *MemoryStore) ListPoolBases(_ context.Context, chainID string) ([]PoolBa
 	for _, pool := range s.poolBase {
 		if pool.Key.ChainID == chainID {
 			pools = append(pools, pool)
+		}
+	}
+
+	sort.Slice(pools, func(i, j int) bool {
+		return pools[i].Key.PoolID < pools[j].Key.PoolID
+	})
+
+	return pools, nil
+}
+
+func (s *MemoryStore) ListPoolData(_ context.Context, chainID string) ([]PoolData, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pools := make([]PoolData, 0)
+	for _, data := range s.poolData {
+		if data.Key.ChainID == chainID {
+			pools = append(pools, data)
 		}
 	}
 

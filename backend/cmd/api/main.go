@@ -13,12 +13,20 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/config"
 	"github.com/lancechuangdev/prism/backend/internal/httpserver"
 	"github.com/lancechuangdev/prism/backend/internal/logging"
+	"github.com/lancechuangdev/prism/backend/internal/store"
 )
 
 func main() {
 	cfg := config.Load()
 	logger := logging.New(cfg.Env)
-	server := httpserver.New(cfg, logger)
+
+	repo := store.NewMemoryStore()
+	if err := store.SeedDemoData(context.Background(), repo); err != nil {
+		logger.Error("seed demo data failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+
+	server := httpserver.New(cfg, logger, repo)
 
 	go func() {
 		logger.Info("api server starting", slog.String("addr", server.Addr))

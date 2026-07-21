@@ -18,27 +18,27 @@ type TokenInfo struct {
 }
 
 type TokenSnapshot struct {
-	Address string `json:"address"`
-	Symbol string `json:"symbol"`
-	LogoURL string `json:"logoUrl"`
-	Price string `json:"price"`
-	Fee string `json:"fee"`
-	Decimals int `json:"decimals"`
+	Address  string `json:"address"`
+	Symbol   string `json:"symbol"`
+	LogoURL  string `json:"logoUrl"`
+	Price    string `json:"price"`
+	Fee      string `json:"fee"`
+	Decimals int    `json:"decimals"`
 }
 
 type PoolKey struct {
 	ChainID string
-	PoolID int64
+	PoolID  int64
 }
 
 type PoolState string
 
 const (
-	PoolStateFunding PoolState = "0"
-	PoolStateActive PoolState = "1"
-	PoolStateREPAID PoolState = "2"
+	PoolStateFunding    PoolState = "0"
+	PoolStateActive     PoolState = "1"
+	PoolStateREPAID     PoolState = "2"
 	PoolStateLiquidated PoolState = "3"
-	PoolStateCancelled PoolState = "4"
+	PoolStateCancelled  PoolState = "4"
 )
 
 type PoolBase struct {
@@ -76,4 +76,3 @@ type PoolSnapshot struct {
 	Base PoolBase `json:"base"`
 	Data PoolData `json:"data"`
 }
-
