@@ -154,6 +154,37 @@ reader can implement the same `chain.Reader` interface.
 
 ## Step 5: Scheduler
 
+- Build the second backend process: a scheduler worker.
+- Reuse the same `chain.SyncPools` function from the API bootstrap path.
+- Run one sync immediately, then repeat on `PRISM_SYNC_INTERVAL`.
+- Keep failures isolated to one sync attempt so the worker can keep running.
+
+```text
+The scheduler currently writes to an in-memory repository. 
+MySQL will be added later.
+```
+
+Files:
+
+- `cmd/scheduler/main.go`
+- `internal/scheduler/pool_syncer.go`
+- `internal/scheduler/pool_syncer_test.go`
+- `internal/config/config.go`
+
+Run:
+
+```bash
+cd backend
+PRISM_ENV=local PRISM_CHAIN_ID=97 PRISM_SYNC_INTERVAL=30s go run ./cmd/scheduler
+```
+
+Run Go Tests:
+
+```bash
+cd backend
+go test ./...
+```
+
 ## Step 6: Admin auth
 
 ## Step 7: Price service
