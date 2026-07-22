@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/lancechuangdev/prism/backend/internal/auth"
 	"github.com/lancechuangdev/prism/backend/internal/chain"
 	"github.com/lancechuangdev/prism/backend/internal/config"
 	"github.com/lancechuangdev/prism/backend/internal/httpserver"
@@ -29,7 +30,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := httpserver.New(cfg, logger, repo)
+	authService := auth.NewService(auth.Config{
+		AdminUsername: cfg.AdminUsername,
+		AdminPassword: cfg.AdminPassword,
+		TokenSecret:   cfg.TokenSecret,
+		TokenTTL:      cfg.TokenTTL,
+	})
+
+	server := httpserver.New(cfg, logger, repo, authService)
 
 	go func() {
 		logger.Info("api server starting", slog.String("addr", server.Addr))

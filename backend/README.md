@@ -185,7 +185,72 @@ cd backend
 go test ./...
 ```
 
-## Step 6: Admin auth
+## Step 6: Admin auth (custom bearer-token authentication using HMAC-SHA256)
+
+- Add config-driven admin credentials.
+- Issue signed tokens after login.
+- Track active sessions in memory so logout can revoke a token.
+- Protect admin routes with auth middleware.
+
+Important for this checkpoint:
+
+```text
+Sessions are still in memory. Redis will be added later to store login state
+so logout survives across API processes.
+```
+
+Files:
+
+- `internal/auth/service.go`
+- `internal/auth/service_test.go`
+- `internal/httpserver/server.go`
+- `internal/httpserver/server_test.go`
+- `internal/config/config.go`
+- `cmd/api/main.go`
+
+Run:
+
+```bash
+cd backend
+PRISM_ENV=local \
+PRISM_CHAIN_ID=97 \
+PRISM_API_VERSION=1 \
+PRISM_API_PORT=8081 \
+PRISM_ADMIN_USERNAME=admin \
+PRISM_ADMIN_PASSWORD=password \
+PRISM_TOKEN_SECRET=local-secret \
+PRISM_TOKEN_TTL=1h \
+go run ./cmd/api
+```
+
+Login:
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/user/login" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"admin","password":"password"}'
+```
+
+Use the returned `tokenId`:
+
+```bash
+curl "http://localhost:8080/api/v1/admin/session" \
+  -H "Authorization: Bearer <tokenId>"
+```
+
+Logout:
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/user/logout" \
+  -H "Authorization: Bearer <tokenId>"
+```
+
+Run Go Tests:
+
+```bash
+cd backend
+go test ./...
+```
 
 ## Step 7: Price service
 

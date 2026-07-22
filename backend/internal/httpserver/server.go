@@ -1,12 +1,14 @@
 package httpserver
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/lancechuangdev/prism/backend/internal/auth"
 	"github.com/lancechuangdev/prism/backend/internal/config"
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
@@ -29,11 +31,24 @@ type tokenListResponse struct {
 	Data []store.TokenInfo `json:"data"`
 }
 
+type loginRequest struct {
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
+type loginResponse struct {
+	TokenID string `json:"tokenId"`
+}
+
+type sessionResponse struct {
+	Username string `json:"username"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func New(cfg config.Config, logger *slog.Logger, repo store.Repository) *http.Server {
+func New(cfg config.Config, logger *slog.Logger, repo store.Repository, authService *auth.Service) *http.Server {
 	mux := http.NewServeMux()
 	apiPrefix := "/api/v" + strings.TrimPrefix(cfg.APIVersion, "v")
 
@@ -105,6 +120,37 @@ func New(cfg config.Config, logger *slog.Logger, repo store.Repository) *http.Se
 		writeJSON(w, http.StatusOK, tokenListResponse{Data: tokens})
 	})
 
+	mux.HandleFunc("POST "+apiPrefix+"/user/login", func(w http.ResponseWriter, r *http.Request) {
+		req := loginRequest{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid login body"})
+			return
+		}
+
+		token, err := authService.Login(req.Name, req.Password)
+		if err != nil {
+			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid username or password"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, loginResponse{TokenID: token})
+	})
+
+	mux.Handle("POST "+apiPrefix+"/user/logout", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := tokenFromRequest(r)
+		authService.Logout(token)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})))
+
+	mux.Handle("GET "+apiPrefix+"/admin/session", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		username, ok := usernameFromContext(r.Context())
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "unauthorized"})
+		} else {
+			writeJSON(w, http.StatusOK, sessionResponse{Username: username})
+		}
+	})))
+
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "route not found"})
 	})
@@ -126,6 +172,36 @@ func requireChainID(w http.ResponseWriter, r *http.Request) (string, bool) {
 		return "", false
 	}
 	return chainID, true
+}
+
+func requireAuth(authService *auth.Service, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := tokenFromRequest(r)
+		username, err := authService.Authenticate(token)
+		if err != nil {
+			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid token"})
+			return
+		}
+
+		ctx := contextWithUsername(r, username)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func tokenFromRequest(r *http.Request) string {
+	authorization := strings.TrimSpace(r.Header.Get("Authorization"))
+	return strings.TrimSpace(strings.TrimPrefix(authorization, "Bearer "))
+}
+
+type usernameContextKey struct{}
+
+func contextWithUsername(r *http.Request, username string) context.Context {
+	return context.WithValue(r.Context(), usernameContextKey{}, username)
+}
+
+func usernameFromContext(ctx context.Context) (string, bool) {
+	username, ok := ctx.Value(usernameContextKey{}).(string)
+	return username, ok
 }
 
 func requestLogger(logger *slog.Logger, next http.Handler) http.Handler {
