@@ -15,6 +15,7 @@ const (
 	defaultAdminPass   = "password"
 	defaultTokenTTL    = time.Hour
 	defaultTokenSecret = "local-development-secret"
+	defaultPriceSymbol = "PRM"
 )
 
 type Config struct {
@@ -27,6 +28,7 @@ type Config struct {
 	AdminPassword string
 	TokenSecret   string
 	TokenTTL      time.Duration
+	PriceSymbol   string
 }
 
 func Load() Config {
@@ -36,10 +38,11 @@ func Load() Config {
 		APIVersion:    readEnv("PRISM_API_VERSION", defaultAPIVersion),
 		ChainID:       readEnv("PRISM_CHAIN_ID", defaultChainId),
 		SyncInteral:   readDurationEnv("PRISM_SYNC_INTERVAL", defaultSyncEvery),
-		AdminUsername: readEnv("PLEDGE_ADMIN_USERNAME", defaultAdminUser),
-		AdminPassword: readEnv("PLEDGE_ADMIN_PASSWORD", defaultAdminPass),
-		TokenSecret:   readEnv("PLEDGE_TOKEN_SECRET", defaultTokenSecret),
-		TokenTTL:      readDurationEnv("PLEDGE_TOKEN_TTL", defaultTokenTTL),
+		AdminUsername: readEnv("PRISM_ADMIN_USERNAME", defaultAdminUser),
+		AdminPassword: readEnv("PRISM_ADMIN_PASSWORD", defaultAdminPass),
+		TokenSecret:   readEnv("PRISM_TOKEN_SECRET", defaultTokenSecret),
+		TokenTTL:      readDurationEnv("PRISM_TOKEN_TTL", defaultTokenTTL),
+		PriceSymbol:   readEnv("PRISM_PRICE_SYMBOL", defaultPriceSymbol),
 	}
 }
 

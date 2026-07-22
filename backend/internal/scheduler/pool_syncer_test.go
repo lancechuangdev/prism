@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lancechuangdev/prism/backend/internal/chain"
+	"github.com/lancechuangdev/prism/backend/internal/price"
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
 
@@ -14,8 +15,9 @@ func TestPoolSyncerRunOnce(t *testing.T) {
 	ctx := context.Background()
 	repo := store.NewMemoryStore()
 	reader := chain.NewDemoReader()
+	prices := price.NewService(price.NewDemoProvider())
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	syncer := NewPoolSyncer(reader, repo, "97", logger)
+	syncer := NewPoolSyncer(reader, repo, "97", prices, "PRM", logger)
 
 	if err := syncer.RunOnce(ctx); err != nil {
 		t.Fatalf("run once: %v", err)

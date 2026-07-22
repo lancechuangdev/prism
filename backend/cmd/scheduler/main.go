@@ -10,6 +10,7 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/chain"
 	"github.com/lancechuangdev/prism/backend/internal/config"
 	"github.com/lancechuangdev/prism/backend/internal/logging"
+	"github.com/lancechuangdev/prism/backend/internal/price"
 	"github.com/lancechuangdev/prism/backend/internal/scheduler"
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
@@ -19,7 +20,9 @@ func main() {
 	logger := logging.New(cfg.Env)
 	repo := store.NewMemoryStore()
 	reader := chain.NewDemoReader()
-	syncer := scheduler.NewPoolSyncer(reader, repo, cfg.ChainID, logger)
+	provider := price.NewDemoProvider()
+	prices := price.NewService(provider)
+	syncer := scheduler.NewPoolSyncer(reader, repo, cfg.ChainID, prices, cfg.PriceSymbol, logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -28,6 +31,7 @@ func main() {
 		"scheduler starting",
 		slog.String("chainID", cfg.ChainID),
 		slog.Duration("interval", cfg.SyncInteral),
+		slog.String("priceSymbol", cfg.PriceSymbol),
 	)
 
 	if err := syncer.Run(ctx, cfg.SyncInteral); err != nil {

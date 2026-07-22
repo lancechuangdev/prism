@@ -254,4 +254,57 @@ go test ./...
 
 ## Step 7: Price service
 
+- Add a dedicated price service instead of mixing price logic into HTTP routes.
+- Keep the price provider behind an interface so a future oracle provider can replace the demo provider.
+- Expose `GET /api/v1/price?symbol=PRISM` for a simple latest-price read.
+- Let the scheduler refresh/log the configured price symbol on each sync cycle.
+
+Files:
+
+- `internal/price/service.go`
+- `internal/price/demo_provider.go`
+- `internal/price/service_test.go`
+- `internal/httpserver/server.go`
+- `internal/httpserver/server_test.go`
+- `internal/scheduler/pool_syncer.go`
+- `internal/config/config.go`
+- `cmd/api/main.go`
+- `cmd/scheduler/main.go`
+
+Run API:
+
+```bash
+cd backend
+PRISM_ENV=local \
+PRISM_CHAIN_ID=97 \
+PRISM_API_VERSION=1 \
+PRISM_API_PORT=8081 \
+PRISM_PRICE_SYMBOL=PRM \
+go run ./cmd/api
+```
+
+Query latest price:
+
+```bash
+curl "http://localhost:8080/api/v1/price?symbol=PRM"
+```
+
+Run scheduler:
+
+```bash
+cd backend
+PRISM_ENV=local \
+PRISM_CHAIN_ID=97 \
+PRISM_SYNC_INTERVAL=30s \
+PRISM_PRICE_SYMBOL=PRM \
+go run ./cmd/scheduler
+```
+
+Run Go Tests:
+
+```bash
+cd backend
+go test ./...
+```
+
 ## Step 8: Multisig/admin config API

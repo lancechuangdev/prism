@@ -14,6 +14,7 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/auth"
 	"github.com/lancechuangdev/prism/backend/internal/chain"
 	"github.com/lancechuangdev/prism/backend/internal/config"
+	"github.com/lancechuangdev/prism/backend/internal/price"
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
 
@@ -96,6 +97,28 @@ func TestTokenList(t *testing.T) {
 
 	if len(body.Data) != 2 {
 		t.Fatalf("expected two tokens, got %d", len(body.Data))
+	}
+}
+
+func TestPrice(t *testing.T) {
+	server := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/price?symbol=PRM", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var body priceResponse
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if body.Data.Symbol != "PRM" || body.Data.Price != "0.0027" {
+		t.Fatalf("unexpected price response: %+v", body.Data)
 	}
 }
 
@@ -201,5 +224,6 @@ func newTestServer(t *testing.T) *http.Server {
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		repo,
 		auth,
+		price.NewService(price.NewDemoProvider()),
 	)
 }

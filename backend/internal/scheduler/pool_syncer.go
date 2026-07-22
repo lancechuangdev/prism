@@ -7,22 +7,27 @@ import (
 	"time"
 
 	"github.com/lancechuangdev/prism/backend/internal/chain"
+	"github.com/lancechuangdev/prism/backend/internal/price"
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
 
 type PoolSyncer struct {
-	reader  chain.Reader
-	repo    store.Repository
-	chainID string
-	logger  *slog.Logger
+	reader       chain.Reader
+	repo         store.Repository
+	chainID      string
+	priceService *price.Service
+	symbol       string
+	logger       *slog.Logger
 }
 
-func NewPoolSyncer(reader chain.Reader, repo store.Repository, chainID string, logger *slog.Logger) *PoolSyncer {
+func NewPoolSyncer(reader chain.Reader, repo store.Repository, chainID string, priceService *price.Service, symbol string, logger *slog.Logger) *PoolSyncer {
 	return &PoolSyncer{
-		reader:  reader,
-		repo:    repo,
-		chainID: chainID,
-		logger:  logger,
+		reader:       reader,
+		repo:         repo,
+		chainID:      chainID,
+		priceService: priceService,
+		symbol:       symbol,
+		logger:       logger,
 	}
 }
 
@@ -47,6 +52,20 @@ func (s *PoolSyncer) RunOnce(ctx context.Context) error {
 		slog.Int("pools", len(pools)),
 		slog.Int("tokens", len(tokens)),
 	)
+
+	if s.priceService != nil && s.symbol != "" {
+		quote, err := s.priceService.Latest(ctx, s.symbol)
+		if err != nil {
+			return fmt.Errorf("refresh price %s: %w", s.symbol, err)
+		}
+		s.logger.Info(
+			"price refresh completed",
+			slog.String("symbol", quote.Symbol),
+			slog.String("currency", quote.Currency),
+			slog.String("price", quote.Price),
+			slog.String("source", quote.Source),
+		)
+	}
 
 	return nil
 }
