@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/lancechuangdev/prism/backend/internal/chain"
 	"github.com/lancechuangdev/prism/backend/internal/config"
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
@@ -99,8 +100,8 @@ func newTestServer(t *testing.T) *http.Server {
 	t.Helper()
 
 	repo := store.NewMemoryStore()
-	if err := store.SeedDemoData(context.Background(), repo); err != nil {
-		t.Fatalf("seed demo data: %v", err)
+	if err := chain.SyncPools(context.Background(), chain.NewDemoReader(), repo, "97"); err != nil {
+		t.Fatalf("sync demo contract data: %v", err)
 	}
 
 	return New(

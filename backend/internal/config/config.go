@@ -6,12 +6,14 @@ const (
 	defaultEnv        = "local"
 	defaultPort       = "8080"
 	defaultAPIVersion = "1"
+	defaultChainId    = "97"
 )
 
 type Config struct {
 	Env        string
 	Port       string
 	APIVersion string
+	ChainID    string
 }
 
 func Load() Config {
@@ -19,6 +21,7 @@ func Load() Config {
 		Env:        readEnv("PRISM_ENV", defaultEnv),
 		Port:       readEnv("PRISM_API_PORT", defaultPort),
 		APIVersion: readEnv("PRISM_API_VERSION", defaultAPIVersion),
+		ChainID:    readEnv("PRISM_CHAIN_ID", defaultChainId),
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/lancechuangdev/prism/backend/internal/chain"
 	"github.com/lancechuangdev/prism/backend/internal/config"
 	"github.com/lancechuangdev/prism/backend/internal/httpserver"
 	"github.com/lancechuangdev/prism/backend/internal/logging"
@@ -21,8 +22,10 @@ func main() {
 	logger := logging.New(cfg.Env)
 
 	repo := store.NewMemoryStore()
-	if err := store.SeedDemoData(context.Background(), repo); err != nil {
-		logger.Error("seed demo data failed", slog.Any("error", err))
+	reader := chain.NewDemoReader()
+
+	if err := chain.SyncPools(context.Background(), reader, repo, cfg.ChainID); err != nil {
+		logger.Error("sync demo contract data failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 

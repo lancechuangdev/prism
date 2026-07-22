@@ -75,6 +75,7 @@ go test ./...
 ```
 
 ## Step 3: Pool and token Read-only API
+
 - Expose the pools and tokens read-only API and keep route handlers thin: parse `chainId`, call the repository, return JSON.
 - Serve data from the repository interface instead of hardcoding storage details into the HTTP layer.
 - Use seeded memory data until the contract reader and MySQL store are added.
@@ -109,6 +110,47 @@ go test ./...
 ```
 
 ## Step 4: Contract reader
+
+- Define the boundary between backend code and on-chain contract reads.
+- Keep raw contract-shaped data separate from database/API models.
+- Translate contract indexes into API pool IDs: contract index `0` becomes
+  `poolID = 1`.
+- Sync pool base data, pool settlement data, and token metadata into the
+  repository through one function.
+
+Files:
+
+- `internal/chain/reader.go`
+- `internal/chain/demo_reader.go`
+- `internal/chain/sync.go`
+- `internal/chain/sync_test.go`
+- `cmd/api/main.go`
+- `internal/config/config.go`
+
+Run:
+
+```bash
+cd backend
+PRISM_ENV=local PRISM_CHAIN_ID=97 PRISM_API_VERSION=1 PRISM_API_PORT=8081 go run ./cmd/api
+```
+
+Then query:
+
+```bash
+curl "http://localhost:8080/api/v1/poolBaseInfo?chainId=97"
+curl "http://localhost:8080/api/v1/poolDataInfo?chainId=97"
+curl "http://localhost:8080/api/v1/token?chainId=97"
+```
+
+Run Go Tests:
+
+```bash
+cd backend
+go test ./...
+```
+
+For now, Step 4 uses `DemoReader` instead of a real RPC client. The next real
+reader can implement the same `chain.Reader` interface.
 
 ## Step 5: Scheduler
 
