@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -24,7 +25,13 @@ func main() {
 	cfg := config.Load()
 	logger := logging.New(cfg.Env)
 
-	repo := store.NewMemoryStore()
+	repo, closeStore, err := openStore(context.Background(), cfg)
+	if err != nil {
+		logger.Error("open store failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer closeStore()
+
 	reader := chain.NewDemoReader()
 
 	if err := chain.SyncPools(context.Background(), reader, repo, cfg.ChainID); err != nil {
@@ -52,6 +59,22 @@ func main() {
 	}()
 
 	waitForShutdown(server, logger)
+}
+
+func openStore(ctx context.Context, cfg config.Config) (store.Repository, func(), error) {
+	switch cfg.StoreDriver {
+	case "memory":
+		return store.NewMemoryStore(), func() {}, nil
+	case "mysql":
+		mysqlStore, err := store.OpenMySQL(ctx, cfg.MySQLDSN)
+		if err != nil {
+			return nil, nil, err
+		}
+		return mysqlStore, func() { _ = mysqlStore.Close() }, nil
+	default:
+		return nil, nil, fmt.Errorf("unsupported store driver %q", cfg.StoreDriver)
+	}
+
 }
 
 func waitForShutdown(server *http.Server, logger *slog.Logger) {

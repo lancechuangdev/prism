@@ -46,6 +46,10 @@ func OpenMySQL(ctx context.Context, dsn string) (*MySQLStore, error) {
 	return store, nil
 }
 
+func (s *MySQLStore) Close() error {
+	return s.db.Close()
+}
+
 func (s *MySQLStore) Migrate(ctx context.Context) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS poolbases (
