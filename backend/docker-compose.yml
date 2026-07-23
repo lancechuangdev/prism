@@ -1,0 +1,72 @@
+x-prism-env: &prism-env
+  PRISM_ENV: local
+  PRISM_CHAIN_ID: "97"
+  PRISM_API_VERSION: "1"
+  PRISM_STORE: mysql
+  PRISM_MYSQL_DSN: "prism:prism@tcp(mysql:3306)/prism_backend?parseTime=true&charset=utf8mb4&loc=Local"
+  PRISM_REDIS_ADDR: redis:6379
+  PRISM_REDIS_PASSWORD: ""
+  PRISM_REDIS_DB: "0"
+  PRISM_PRICE_CACHE_TTL: 30s
+  PRISM_PRICE_SYMBOL: PRM
+  PRISM_ADMIN_USERNAME: admin
+  PRISM_ADMIN_PASSWORD: password
+  PRISM_TOKEN_SECRET: local-secret
+  PRISM_TOKEN_TTL: 1h
+
+services:
+  api:
+    build: .
+    command: ["/app/api"]
+    environment:
+      <<: *prism-env
+      PRISM_API_PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build: .
+    command: ["/app/scheduler"]
+    environment:
+      <<: *prism-env
+      PRISM_SYNC_INTERVAL: 30s
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: prism_backend
+      MYSQL_USER: prism
+      MYSQL_PASSWORD: prism
+    ports:
+      - "3306:3306"
+    volumes:
+      - prism_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u prism --password=prism"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  prism_mysql_data:

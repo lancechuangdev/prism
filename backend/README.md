@@ -132,7 +132,7 @@ Run API with MySQL:
 ```bash
 cd backend
 PRISM_STORE=mysql \
-PRISM_MYSQL_DSN="prism:prism@tcp(127.0.0.1:3306)/backend?parseTime=true&charset=utf8mb4&loc=Local" \
+PRISM_MYSQL_DSN="prism:prism@tcp(127.0.0.1:3306)/prism_backend?parseTime=true&charset=utf8mb4&loc=Local" \
 PRISM_ENV=local \
 PRISM_CHAIN_ID=97 \
 PRISM_API_VERSION=1 \
@@ -156,6 +156,53 @@ Important:
 
 ```text
 Use parseTime=true in the DSN so MySQL DATETIME columns scan into Go time.Time.
+```
+
+## Docker Compose
+
+Run the stack with API, scheduler, MySQL, and Redis:
+
+```bash
+cd backend
+docker compose up --build
+```
+
+The API is exposed on the host at `http://localhost:8080`.
+
+Quick checks:
+
+```bash
+curl http://localhost:8080/healthz
+curl http://localhost:8080/api/v1/poolBaseInfo?chainId=97
+curl http://localhost:8080/api/v1/price?symbol=PRM
+```
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+Remove the MySQL volume too:
+
+```bash
+docker compose down -v
+```
+
+`Dockerfile` describes how to build the Go app image from source code. Docker Compose needs instructions for turning api and scheduler repo into runnable binaries:
+```
+RUN go build -o /out/api ./cmd/api
+RUN go build -o /out/scheduler ./cmd/scheduler
+```
+
+`docker-compose.yml` describes which containers to run together.
+```
+run api
+run scheduler
+run mysql
+run redis
+connect them with env vars
+expose API on localhost:8080
 ```
 
 ## Step 1: Runnable API Skeleton
@@ -240,7 +287,7 @@ Then query:
 
 ```bash
 curl "http://localhost:8080/api/v1/poolBaseInfo?chainId=97"
-curl "http://localhost:8081/api/v1/poolDataInfo?chainId=97"
+curl "http://localhost:8080/api/v1/poolDataInfo?chainId=97"
 curl "http://localhost:8080/api/v1/token?chainId=97"
 ```
 
