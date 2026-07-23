@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"time"
 )
 
@@ -16,6 +17,7 @@ const (
 	defaultTokenTTL    = time.Hour
 	defaultTokenSecret = "local-development-secret"
 	defaultPriceSymbol = "PRM"
+	defaultStoreDriver = "memory"
 )
 
 type Config struct {
@@ -29,6 +31,8 @@ type Config struct {
 	TokenSecret   string
 	TokenTTL      time.Duration
 	PriceSymbol   string
+	StoreDriver   string
+	MySQLDSN      string
 }
 
 func Load() Config {
@@ -43,6 +47,8 @@ func Load() Config {
 		TokenSecret:   readEnv("PRISM_TOKEN_SECRET", defaultTokenSecret),
 		TokenTTL:      readDurationEnv("PRISM_TOKEN_TTL", defaultTokenTTL),
 		PriceSymbol:   readEnv("PRISM_PRICE_SYMBOL", defaultPriceSymbol),
+		StoreDriver:   strings.ToLower(readEnv("PRISM_STORE", defaultStoreDriver)),
+		MySQLDSN:      readEnv("PRISM_MYSQL_DSN", ""),
 	}
 }
 

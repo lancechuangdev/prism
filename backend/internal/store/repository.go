@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"errors"
+
+	"github.com/lancechuangdev/prism/backend/internal/multisig"
 )
 
 var ErrNotFound = errors.New("record not found")
@@ -25,4 +27,5 @@ type TokenRepository interface {
 type Repository interface {
 	PoolRepository
 	TokenRepository
+	multisig.MultiSigStore
 }
