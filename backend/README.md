@@ -1,19 +1,101 @@
-# prism backend
+# Prism backend
 
 The backend consists of:
 
 - API server: serve frontend/admin HTTP APIs, token list, pool data, login, websocket price push.
 
-- Scheduler worker: read on-chain pool/oracle data and save snapshots into MySQL.
+- Scheduler worker: read on-chain pool/oracle data and save snapshots into data store.
 
 ```mermaid
 flowchart LR
-  Contract[PrismPool + Oracle contracts] --> Scheduler[Go scheduler]
-  Scheduler --> MySQL[(MySQL canonical pool/token data)]
-  Scheduler --> Redis[(Redis cache/change markers)]
-  Redis --> API
-  MySQL --> API
-  API --> Frontend[Prism-frontend]
+  Contract[PrismPool] --> Scheduler[Scheduler worker]
+  Contract --> APIBootstrap[API startup sync]
+  Scheduler --> Store[(MySQL store)]
+  APIBootstrap --> Store
+  Price[Oracle reader] --> Cache[(Redis cache)]
+  Cache --> API[API server]
+  Scheduler --> Cache
+  Store --> API
+  API --> Frontend[Frontend / curl]
+```
+
+## API Endpoints
+
+Health:
+
+```text
+GET  /healthz
+```
+
+Public read APIs:
+
+```text
+GET  /api/v1/poolBaseInfo?chainId=97
+GET  /api/v1/poolDataInfo?chainId=97
+GET  /api/v1/token?chainId=97
+GET  /api/v1/price?symbol=PRM
+```
+
+Auth APIs:
+
+```text
+POST /api/v1/user/login
+POST /api/v1/user/logout
+```
+
+Protected admin APIs:
+
+```text
+GET  /api/v1/admin/session
+POST /api/v1/pool/setMultiSign
+POST /api/v1/pool/getMultiSign
+```
+
+Protected routes require either header:
+
+```text
+Authorization: Bearer <tokenId>
+```
+
+The `/api/v1` prefix uses `PRISM_API_VERSION=1`.
+
+## Cache
+
+It uses Redis for runtime caching. Currently Redis caches price quotes such as `price:PRM`.
+
+Redis config:
+
+```text
+PRISM_REDIS_ADDR=127.0.0.1:6379
+PRISM_REDIS_PASSWORD=
+PRISM_REDIS_DB=0
+PRISM_PRICE_CACHE_TTL=30s
+```
+
+Run API with Redis cache:
+
+```bash
+cd backend
+PRISM_REDIS_ADDR=127.0.0.1:6379 \
+PRISM_PRICE_CACHE_TTL=30s \
+PRISM_API_PORT=8080 \
+go run ./cmd/api
+```
+
+Run scheduler with Redis cache:
+
+```bash
+cd backend
+PRISM_REDIS_ADDR=127.0.0.1:6379 \
+PRISM_PRICE_CACHE_TTL=30s \
+PRISM_SYNC_INTERVAL=30s \
+go run ./cmd/scheduler
+```
+
+Important:
+
+```text
+Redis must be running before starting the API or scheduler.
 ```
 
 ## Storage
