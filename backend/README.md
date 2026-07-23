@@ -33,7 +33,7 @@ Run:
 
 ```bash
 cd backend
-PRISM_ENV=local PRISM_API_PORT=8081 go run ./cmd/api
+PRISM_ENV=local PRISM_API_PORT=8080 go run ./cmd/api
 ```
 
 Then open:
@@ -131,7 +131,7 @@ Run:
 
 ```bash
 cd backend
-PRISM_ENV=local PRISM_CHAIN_ID=97 PRISM_API_VERSION=1 PRISM_API_PORT=8081 go run ./cmd/api
+PRISM_ENV=local PRISM_CHAIN_ID=97 PRISM_API_VERSION=1 PRISM_API_PORT=8080 go run ./cmd/api
 ```
 
 Then query:
@@ -215,7 +215,7 @@ cd backend
 PRISM_ENV=local \
 PRISM_CHAIN_ID=97 \
 PRISM_API_VERSION=1 \
-PRISM_API_PORT=8081 \
+PRISM_API_PORT=8080 \
 PRISM_ADMIN_USERNAME=admin \
 PRISM_ADMIN_PASSWORD=password \
 PRISM_TOKEN_SECRET=local-secret \
@@ -278,7 +278,7 @@ cd backend
 PRISM_ENV=local \
 PRISM_CHAIN_ID=97 \
 PRISM_API_VERSION=1 \
-PRISM_API_PORT=8081 \
+PRISM_API_PORT=8080 \
 PRISM_PRICE_SYMBOL=PRM \
 go run ./cmd/api
 ```
@@ -308,3 +308,73 @@ go test ./...
 ```
 
 ## Step 8: Multisig/admin config API
+
+- Add protected admin endpoints for chain-specific multisig metadata.
+- Store one multisig config per chain ID.
+- Require admin auth before reading or writing admin config.
+
+Files:
+
+- `internal/multisig/service.go`
+- `internal/multisig/service_test.go`
+- `internal/httpserver/server.go`
+- `internal/httpserver/server_test.go`
+- `cmd/api/main.go`
+
+Run API:
+
+```bash
+cd backend
+PRISM_ENV=local \
+PRISM_CHAIN_ID=97 \
+PRISM_API_VERSION=1 \
+PRISM_API_PORT=8080 \
+PRISM_ADMIN_USERNAME=admin \
+PRISM_ADMIN_PASSWORD=password \
+PRISM_TOKEN_SECRET=local-secret \
+go run ./cmd/api
+```
+
+Login:
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/user/login" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"admin","password":"password"}'
+```
+
+Set multisig config:
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/pool/setMultiSign" \
+  -H "Authorization: Bearer <tokenId>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chain_id":"97",
+    "sp_name":"SP",
+    "_spToken":"SP",
+    "jp_name":"JP",
+    "_jpToken":"JP",
+    "sp_address":"0xsp",
+    "jp_address":"0xjp",
+    "spHash":"0xsphash",
+    "jpHash":"0xjphash",
+    "multi_sign_account":["0xowner1","0xowner2"]
+  }'
+```
+
+Get multisig config:
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/pool/getMultiSign" \
+  -H "Authorization: Bearer <tokenId>" \
+  -H "Content-Type: application/json" \
+  -d '{"chain_id":"97"}'
+```
+
+Run Go Tests:
+
+```bash
+cd backend
+go test ./...
+```

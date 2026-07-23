@@ -2,9 +2,12 @@ package store
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/lancechuangdev/prism/backend/internal/multisig"
 )
 
 type MemoryStore struct {
@@ -12,6 +15,7 @@ type MemoryStore struct {
 	poolBase map[PoolKey]PoolBase
 	poolData map[PoolKey]PoolData
 	tokens   map[TokenKey]TokenInfo
+	multisig map[string]multisig.Config
 	now      func() time.Time
 }
 
@@ -20,8 +24,13 @@ func NewMemoryStore() *MemoryStore {
 		poolBase: make(map[PoolKey]PoolBase),
 		poolData: make(map[PoolKey]PoolData),
 		tokens:   make(map[TokenKey]TokenInfo),
+		multisig: make(map[string]multisig.Config),
 		now:      time.Now,
 	}
+}
+
+func (s *MemoryStore) SetClockForTest(now func() time.Time) {
+	s.now = now
 }
 
 func (s *MemoryStore) UpsertPoolBase(_ context.Context, pool PoolBase) error {
@@ -155,4 +164,33 @@ func (s *MemoryStore) ListTokens(_ context.Context, chainID string) ([]TokenInfo
 	})
 
 	return tokens, nil
+}
+
+func (s *MemoryStore) Save(_ context.Context, cfg multisig.Config) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := s.now().UTC()
+	if existing, ok := s.multisig[cfg.ChainID]; ok {
+		cfg.CreatedAt = existing.CreatedAt
+	} else if cfg.CreatedAt.IsZero() {
+		cfg.CreatedAt = now
+	}
+	cfg.UpdatedAt = now
+	cfg.MultiSignAccount = slices.Clone(cfg.MultiSignAccount)
+
+	s.multisig[cfg.ChainID] = cfg
+	return nil
+}
+
+func (s *MemoryStore) Get(_ context.Context, chainID string) (multisig.Config, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	cfg, ok := s.multisig[chainID]
+	if !ok {
+		return multisig.Config{}, multisig.ErrNotFound
+	}
+	cfg.MultiSignAccount = slices.Clone(cfg.MultiSignAccount)
+	return cfg, nil
 }

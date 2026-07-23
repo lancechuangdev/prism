@@ -15,6 +15,7 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/config"
 	"github.com/lancechuangdev/prism/backend/internal/httpserver"
 	"github.com/lancechuangdev/prism/backend/internal/logging"
+	"github.com/lancechuangdev/prism/backend/internal/multisig"
 	"github.com/lancechuangdev/prism/backend/internal/price"
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
@@ -39,8 +40,8 @@ func main() {
 	})
 
 	priceService := price.NewService(price.NewDemoProvider())
-
-	server := httpserver.New(cfg, logger, repo, authService, priceService)
+	multisigService := multisig.NewService(repo)
+	server := httpserver.New(cfg, logger, repo, authService, priceService, multisigService)
 
 	go func() {
 		logger.Info("api server starting", slog.String("addr", server.Addr))
