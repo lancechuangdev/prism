@@ -88,13 +88,19 @@ func (r *RPCReader) PoolBaseInfo(ctx context.Context, chainID string, contractIn
 		return ContractPoolBase{}, fmt.Errorf("call getPool(%d): %w", contractIndex, err)
 	}
 	return ContractPoolBase{
-		SettleTime: pool.SettleTime.String(), EndTime: pool.MaturityTime.String(),
-		InterestRate: pool.InterestRate.String(), MaxSupply: pool.MaxLendSupply.String(),
-		LendSupply: pool.TotalLendDeposited.String(), BorrowSupply: pool.TotalCollateralDeposited.String(),
-		MortgageRate: pool.CollateralizationRatio.String(), LendTokenAddress: pool.LendToken.Hex(),
-		BorrowTokenAddress: pool.CollateralToken.Hex(), State: fmt.Sprint(pool.State),
-		SPCoin: pool.LenderPositionToken.Hex(), JPCoin: pool.BorrowerPositionToken.Hex(),
-		AutoLiquidateThreshold: pool.LiquidateRate.String(),
+		SettleTime:               pool.SettleTime.String(),
+		MaturityTime:             pool.MaturityTime.String(),
+		InterestRate:             pool.InterestRate.String(),
+		MaxLendSupply:            pool.MaxLendSupply.String(),
+		TotalLendDeposited:       pool.TotalLendDeposited.String(),
+		TotalCollateralDeposited: pool.TotalCollateralDeposited.String(),
+		CollateralizationRatio:   pool.CollateralizationRatio.String(),
+		LendTokenAddress:         pool.LendToken.Hex(),
+		CollateralTokenAddress:   pool.CollateralToken.Hex(),
+		State:                    fmt.Sprint(pool.State),
+		LenderPositionToken:      pool.LenderPositionToken.Hex(),
+		BorrowerPositionToken:    pool.BorrowerPositionToken.Hex(),
+		LiquidateRate:            pool.LiquidateRate.String(),
 	}, nil
 }
 

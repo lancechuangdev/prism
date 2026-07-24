@@ -15,20 +15,20 @@ func TestMemoryStoreUpsertsAndListsPoolBases(t *testing.T) {
 	store.now = fixedClock(time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC))
 
 	err := store.UpsertPoolBase(ctx, PoolBase{
-		Key:          PoolKey{ChainID: "97", PoolID: 2},
-		LendSupply:   "200",
-		BorrowSupply: "20",
-		State:        PoolStateActive,
+		Key:                      PoolKey{ChainID: "97", PoolID: 2},
+		TotalLendDeposited:       "200",
+		TotalCollateralDeposited: "20",
+		State:                    PoolStateActive,
 	})
 	if err != nil {
 		t.Fatalf("upsert pool base: %v", err)
 	}
 
 	err = store.UpsertPoolBase(ctx, PoolBase{
-		Key:          PoolKey{ChainID: "97", PoolID: 1},
-		LendSupply:   "100",
-		BorrowSupply: "10",
-		State:        PoolStateFunding,
+		Key:                      PoolKey{ChainID: "97", PoolID: 1},
+		TotalLendDeposited:       "100",
+		TotalCollateralDeposited: "10",
+		State:                    PoolStateFunding,
 	})
 	if err != nil {
 		t.Fatalf("upsert pool base: %v", err)

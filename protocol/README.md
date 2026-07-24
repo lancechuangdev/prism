@@ -37,11 +37,20 @@ Install the protocol dependencies if needed:
 npm install
 ```
 
-Start a persistent local Hardhat JSON-RPC node in the first terminal:
+Start a persistent local Hardhat JSON-RPC node in the first terminal. For a backend running directly on the host:
 
 ```bash
 npm run node
 ```
+
+For a backend running in Docker, Hardhat must also accept connections arriving through the host's Docker bridge interface:
+
+```bash
+npx hardhat node --hostname 0.0.0.0
+```
+
+Docker's `host.docker.internal` hostname resolves to the host gateway, commonly `172.17.0.1` on Linux. A Hardhat node bound only to its default `127.0.0.1` address cannot accept connections through that gateway. Binding to `0.0.0.0` is intended for local development and may expose the development
+node to the local network, depending on the host firewall.
 
 Keep that process running. In a second terminal, deploy and seed the protocol:
 

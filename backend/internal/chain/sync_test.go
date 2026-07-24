@@ -27,8 +27,8 @@ func TestSyncPoolsCopiesContractSnapshotsIntoStore(t *testing.T) {
 	if pool.Key.PoolID != 1 {
 		t.Fatalf("expected contract index 0 to become pool id 1, got %d", pool.Key.PoolID)
 	}
-	if pool.LendToken.Symbol != "BUSD" || pool.BorrowToken.Symbol != "BTC" {
-		t.Fatalf("unexpected token snapshots: %+v %+v", pool.LendToken, pool.BorrowToken)
+	if pool.LendToken.Symbol != "BUSD" || pool.CollateralToken.Symbol != "BTC" {
+		t.Fatalf("unexpected token snapshots: %+v %+v", pool.LendToken, pool.CollateralToken)
 	}
 
 	data, err := repo.GetPoolData(ctx, store.PoolKey{ChainID: "97", PoolID: 1})

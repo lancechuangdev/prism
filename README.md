@@ -101,11 +101,11 @@ administration.
 
 ### Deploy the protocol locally
 
-Start a persistent Hardhat node:
+Start a persistent Hardhat node. Bind it to all host interfaces when the backend will run in Docker:
 
 ```bash
 cd protocol
-npm run node
+npx hardhat node --hostname 0.0.0.0
 ```
 
 In a second terminal, deploy the protocol and create one seed pool:
@@ -150,8 +150,9 @@ cd backend
 PRISM_POOL_ADDRESS=0x... docker compose up --build
 ```
 
-Start the local Hardhat node and run `npm run deploy:local` first. Replace
-`0x...` with the `prismPool` address printed by the deployment command.
+Start the local Hardhat node with `--hostname 0.0.0.0` and run `npm run deploy:local` first. Replace `0x...` with the `prismPool` address printed by the deployment command.
+
+The containers resolve `host.docker.internal` to the host-side Docker gateway, commonly `172.17.0.1` on Linux. Hardhat must listen on that interface; its default `127.0.0.1` binding accepts host-loopback connections only. Binding to `0.0.0.0` is intended for local development and may expose the development node to the local network, depending on the host firewall.
 
 This starts four containers:
 

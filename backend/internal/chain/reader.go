@@ -10,19 +10,19 @@ type Reader interface {
 }
 
 type ContractPoolBase struct {
-	SettleTime             string
-	EndTime                string
-	InterestRate           string
-	MaxSupply              string
-	LendSupply             string
-	BorrowSupply           string
-	MortgageRate           string
-	LendTokenAddress       string
-	BorrowTokenAddress     string
-	State                  string
-	SPCoin                 string
-	JPCoin                 string
-	AutoLiquidateThreshold string
+	SettleTime               string
+	MaturityTime             string
+	InterestRate             string
+	MaxLendSupply            string
+	TotalLendDeposited       string
+	TotalCollateralDeposited string
+	CollateralizationRatio   string
+	LendTokenAddress         string
+	CollateralTokenAddress   string
+	State                    string
+	LenderPositionToken      string
+	BorrowerPositionToken    string
+	LiquidateRate            string
 }
 
 type ContractPoolData struct {

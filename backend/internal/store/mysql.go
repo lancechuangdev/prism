@@ -133,7 +133,7 @@ func (s *MySQLStore) UpsertPoolBase(ctx context.Context, pool PoolBase) error {
 	if err != nil {
 		return err
 	}
-	borrowToken, err := json.Marshal(pool.BorrowToken)
+	collateralToken, err := json.Marshal(pool.CollateralToken)
 	if err != nil {
 		return err
 	}
@@ -158,9 +158,10 @@ func (s *MySQLStore) UpsertPoolBase(ctx context.Context, pool PoolBase) error {
 		jp_coin=VALUES(jp_coin),
 		auto_liquidate_threshold=VALUES(auto_liquidate_threshold),
 		updated_at=VALUES(updated_at)`,
-		pool.Key.ChainID, pool.Key.PoolID, pool.SettleTime, pool.EndTime, pool.InterestRate, pool.MaxSupply,
-		pool.LendSupply, pool.BorrowSupply, pool.MortgageRate, string(lendToken), string(borrowToken),
-		string(pool.State), pool.SPCoin, pool.JPCoin, pool.AutoLiquidateThreshold, now, now,
+		pool.Key.ChainID, pool.Key.PoolID, pool.SettleTime, pool.MaturityTime, pool.InterestRate, pool.MaxLendSupply,
+		pool.TotalLendDeposited, pool.TotalCollateralDeposited, pool.CollateralizationRatio,
+		string(lendToken), string(collateralToken), string(pool.State), pool.LenderPositionToken,
+		pool.BorrowerPositionToken, pool.LiquidateRate, now, now,
 	)
 
 	return err
@@ -251,11 +252,12 @@ type rowScanner interface {
 func scanPoolBase(row rowScanner) (PoolBase, error) {
 	pool := PoolBase{}
 	lendTokenJSON := ""
-	borrowTokenJSON := ""
-	err := row.Scan(&pool.Key.ChainID, &pool.Key.PoolID, &pool.SettleTime, &pool.EndTime,
-		&pool.InterestRate, &pool.MaxSupply, &pool.LendSupply, &pool.BorrowSupply,
-		&pool.MortgageRate, &lendTokenJSON, &borrowTokenJSON, &pool.State, &pool.SPCoin,
-		&pool.JPCoin, &pool.AutoLiquidateThreshold, &pool.CreatedAt, &pool.UpdatedAt)
+	collateralTokenJSON := ""
+	err := row.Scan(&pool.Key.ChainID, &pool.Key.PoolID, &pool.SettleTime, &pool.MaturityTime,
+		&pool.InterestRate, &pool.MaxLendSupply, &pool.TotalLendDeposited, &pool.TotalCollateralDeposited,
+		&pool.CollateralizationRatio, &lendTokenJSON, &collateralTokenJSON, &pool.State,
+		&pool.LenderPositionToken, &pool.BorrowerPositionToken, &pool.LiquidateRate,
+		&pool.CreatedAt, &pool.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return PoolBase{}, ErrNotFound
 	}
@@ -265,7 +267,7 @@ func scanPoolBase(row rowScanner) (PoolBase, error) {
 	if err := json.Unmarshal([]byte(lendTokenJSON), &pool.LendToken); err != nil {
 		return PoolBase{}, err
 	}
-	if err := json.Unmarshal([]byte(borrowTokenJSON), &pool.BorrowToken); err != nil {
+	if err := json.Unmarshal([]byte(collateralTokenJSON), &pool.CollateralToken); err != nil {
 		return PoolBase{}, err
 	}
 	return pool, nil

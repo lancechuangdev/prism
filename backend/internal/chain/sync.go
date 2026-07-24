@@ -29,7 +29,7 @@ func SyncPools(ctx context.Context, reader Reader, repo store.Repository, chainI
 			return fmt.Errorf("read lend token at index %d: %w", contractIndex, err)
 		}
 
-		borrowToken, err := reader.TokenInfo(ctx, chainID, rawBase.BorrowTokenAddress)
+		borrowToken, err := reader.TokenInfo(ctx, chainID, rawBase.CollateralTokenAddress)
 		if err != nil {
 			return fmt.Errorf("read borrow token at index %d: %w", contractIndex, err)
 		}
@@ -65,20 +65,20 @@ func toTokenInfo(chainID string, token ContractToken) store.TokenInfo {
 
 func toPoolBase(key store.PoolKey, raw ContractPoolBase, lendToken ContractToken, borrowToken ContractToken) store.PoolBase {
 	return store.PoolBase{
-		Key:                    key,
-		SettleTime:             raw.SettleTime,
-		EndTime:                raw.EndTime,
-		InterestRate:           raw.InterestRate,
-		MaxSupply:              raw.MaxSupply,
-		LendSupply:             raw.LendSupply,
-		BorrowSupply:           raw.BorrowSupply,
-		MortgageRate:           raw.MortgageRate,
-		LendToken:              toTokenSnapshot(lendToken),
-		BorrowToken:            toTokenSnapshot(borrowToken),
-		State:                  store.PoolState(raw.State),
-		SPCoin:                 raw.SPCoin,
-		JPCoin:                 raw.JPCoin,
-		AutoLiquidateThreshold: raw.AutoLiquidateThreshold,
+		Key:                      key,
+		SettleTime:               raw.SettleTime,
+		MaturityTime:             raw.MaturityTime,
+		InterestRate:             raw.InterestRate,
+		MaxLendSupply:            raw.MaxLendSupply,
+		TotalLendDeposited:       raw.TotalLendDeposited,
+		TotalCollateralDeposited: raw.TotalCollateralDeposited,
+		CollateralizationRatio:   raw.CollateralizationRatio,
+		LendToken:                toTokenSnapshot(lendToken),
+		CollateralToken:          toTokenSnapshot(borrowToken),
+		State:                    store.PoolState(raw.State),
+		LenderPositionToken:      raw.LenderPositionToken,
+		BorrowerPositionToken:    raw.BorrowerPositionToken,
+		LiquidateRate:            raw.LiquidateRate,
 	}
 }
 

@@ -107,7 +107,18 @@ func TestRPCReaderReadsContractSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read pool base: %v", err)
 	}
-	if base.LendTokenAddress != common.HexToAddress(testLendAddress).Hex() || base.State != "1" {
+	if base.SettleTime != "100" ||
+		base.MaturityTime != "200" ||
+		base.MaxLendSupply != "1000" ||
+		base.TotalLendDeposited != "500" ||
+		base.TotalCollateralDeposited != "2" ||
+		base.CollateralizationRatio != "200000000" ||
+		base.LendTokenAddress != common.HexToAddress(testLendAddress).Hex() ||
+		base.CollateralTokenAddress != common.HexToAddress(testBorrowAddress).Hex() ||
+		base.State != "1" ||
+		base.LenderPositionToken != common.HexToAddress(testSPAddress).Hex() ||
+		base.BorrowerPositionToken != common.HexToAddress(testJPAddress).Hex() ||
+		base.LiquidateRate != "20000000" {
 		t.Fatalf("unexpected pool base: %+v", base)
 	}
 	data, err := reader.PoolDataInfo(ctx, "31337", 0)

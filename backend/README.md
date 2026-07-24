@@ -115,12 +115,11 @@ The `/api/v1` prefix uses `PRISM_API_VERSION=1`.
 
 ## Chain RPC
 
-Start the local Hardhat node and deploy the protocol before either backend
-process:
+Start the local Hardhat node and deploy the protocol before either backend process. Use a Docker-reachable bind address when running the backend through Compose:
 
 ```bash
 cd protocol
-npm run node
+npx hardhat node --hostname 0.0.0.0
 ```
 
 In another terminal:
@@ -252,7 +251,17 @@ cd backend
 PRISM_POOL_ADDRESS=0x... docker compose up --build
 ```
 
-Compose connects the API and scheduler to the Hardhat node running on the host and uses chain ID `31337`.
+Compose connects the API and scheduler to the Hardhat node running on the host
+and uses chain ID `31337`. On Linux, Compose maps `host.docker.internal` to Docker's host gateway:
+
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
+
+The gateway is commonly `172.17.0.1`, not `127.0.0.1`, because loopback inside a container refers to that container. The mapping identifies how to reach the host, while `--hostname 0.0.0.0` makes Hardhat accept the connection on the host's Docker bridge interface. Both pieces are required for this setup.
+
+Binding Hardhat to `0.0.0.0` is for local development only and may expose its development accounts and RPC methods to the local network, depending on the host firewall.
 
 The API is exposed on the host at `http://localhost:8080`.
 

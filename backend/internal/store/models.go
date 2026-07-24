@@ -42,22 +42,22 @@ const (
 )
 
 type PoolBase struct {
-	Key                    PoolKey       `json:"key"`
-	SettleTime             string        `json:"settleTime"`
-	EndTime                string        `json:"endTime"`
-	InterestRate           string        `json:"interestRate"`
-	MaxSupply              string        `json:"maxSupply"`
-	LendSupply             string        `json:"lendSupply"`
-	BorrowSupply           string        `json:"borrowSupply"`
-	MortgageRate           string        `json:"mortgageRate"`
-	LendToken              TokenSnapshot `json:"lendToken"`
-	BorrowToken            TokenSnapshot `json:"borrowToken"`
-	State                  PoolState     `json:"state"`
-	SPCoin                 string        `json:"spCoin"`
-	JPCoin                 string        `json:"jpCoin"`
-	AutoLiquidateThreshold string        `json:"autoLiquidateThreshold"`
-	CreatedAt              time.Time     `json:"createdAt"`
-	UpdatedAt              time.Time     `json:"updatedAt"`
+	Key                      PoolKey       `json:"key"`
+	SettleTime               string        `json:"settleTime"`
+	MaturityTime             string        `json:"maturityTime"`
+	InterestRate             string        `json:"interestRate"`
+	MaxLendSupply            string        `json:"maxLendSupply"`
+	TotalLendDeposited       string        `json:"totalLendDeposited"`
+	TotalCollateralDeposited string        `json:"totalCollateralDeposited"`
+	CollateralizationRatio   string        `json:"collateralizationRatio"`
+	LendToken                TokenSnapshot `json:"lendToken"`
+	CollateralToken          TokenSnapshot `json:"collateralToken"`
+	State                    PoolState     `json:"state"`
+	LenderPositionToken      string        `json:"lenderPositionToken"`
+	BorrowerPositionToken    string        `json:"borrowerPositionToken"`
+	LiquidateRate            string        `json:"liquidateRate"`
+	CreatedAt                time.Time     `json:"createdAt"`
+	UpdatedAt                time.Time     `json:"updatedAt"`
 }
 
 type PoolData struct {
