@@ -3,8 +3,17 @@
 The Prism backend is a Go service that exposes pool, token, price, authentication, and multisignature-management APIs.
 It contains two executables:
 
-- `cmd/api` starts the HTTP server. On startup, it reads chain data and stores a snapshot in the configured repository (`memory` or `mysql`). Pool and token requests read that indexed data through the chain query service.
-- `cmd/scheduler` periodically reads chain data, writes it to the configured repository, and refreshes the configured price quote through a Redis-backed cache.
+- `cmd/api` starts the HTTP server. On startup, it reads chain data over
+  Ethereum JSON-RPC and stores a snapshot in the configured repository
+  (`memory` or `mysql`). Pool and token requests read that indexed data through
+  the chain query service.
+- `cmd/scheduler` periodically reads chain data over Ethereum JSON-RPC, writes
+  it to the configured repository, and refreshes the configured price quote
+  through a Redis-backed cache.
+
+Both executables require `PRISM_POOL_ADDRESS`. They use
+`PRISM_CHAIN_RPC_URL=http://127.0.0.1:8545` by default and verify that the RPC
+chain ID matches `PRISM_CHAIN_ID`. `DemoReader` is used only by tests.
 
 Selecting MySQL for both executables gives the API and scheduler a shared, persistent repository.
 
@@ -47,12 +56,12 @@ flowchart LR
     ChainService -->|pool and token queries| APIRepo
     MultiSig --> APIRepo
     PriceService --> APICachedProvider
-    DemoChainA[chain reader] -->|startup sync| APIRepo
+    RPCChainA[RPC chain reader] -->|startup sync| APIRepo
   end
 
   subgraph SchedulerProcess[Scheduler process]
     Scheduler[Scheduler worker] -->|periodic sync| SchedulerRepo[Repository interface]
-    DemoChainS[chain reader] --> Scheduler
+    RPCChainS[RPC chain reader] --> Scheduler
     Scheduler --> SchedulerCachedProvider[Cached price provider]
   end
 
@@ -104,6 +113,34 @@ Authorization: Bearer <tokenId>
 
 The `/api/v1` prefix uses `PRISM_API_VERSION=1`.
 
+## Chain RPC
+
+Start the local Hardhat node and deploy the protocol before either backend
+process:
+
+```bash
+cd protocol
+npm run node
+```
+
+In another terminal:
+
+```bash
+cd protocol
+npm run deploy:local
+```
+
+Use the `chainId`, `rpcUrl`, and `prismPool` values printed by the deployment:
+
+```text
+PRISM_CHAIN_ID=31337
+PRISM_CHAIN_RPC_URL=http://127.0.0.1:8545
+PRISM_POOL_ADDRESS=0x...
+```
+
+The API and scheduler fail at startup when the RPC connection, chain ID, or
+pool address is invalid.
+
 ## Cache
 
 The API and scheduler use Redis to cache price quotes under keys such as
@@ -125,11 +162,15 @@ Run either process with Redis cache:
 cd backend
 PRISM_REDIS_ADDR=127.0.0.1:6379 \
 PRISM_PRICE_CACHE_TTL=30s \
+PRISM_CHAIN_ID=31337 \
+PRISM_POOL_ADDRESS=0x... \
 PRISM_API_PORT=8080 \
 go run ./cmd/api
 
 PRISM_REDIS_ADDR=127.0.0.1:6379 \
 PRISM_PRICE_CACHE_TTL=30s \
+PRISM_CHAIN_ID=31337 \
+PRISM_POOL_ADDRESS=0x... \
 PRISM_SYNC_INTERVAL=30s \
 go run ./cmd/scheduler
 ```
@@ -208,8 +249,10 @@ Run the stack with API, scheduler, MySQL, and Redis:
 
 ```bash
 cd backend
-docker compose up --build
+PRISM_POOL_ADDRESS=0x... docker compose up --build
 ```
+
+Compose connects the API and scheduler to the Hardhat node running on the host and uses chain ID `31337`.
 
 The API is exposed on the host at `http://localhost:8080`.
 

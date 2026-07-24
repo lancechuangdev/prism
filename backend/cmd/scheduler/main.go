@@ -38,7 +38,13 @@ func main() {
 	}
 	defer closeCache()
 
-	reader := chain.NewDemoReader()
+	reader, err := chain.NewRPCReader(ctx, cfg.ChainRPCURL, cfg.PoolAddress)
+	if err != nil {
+		logger.Error("open chain RPC reader failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer reader.Close()
+
 	priceProvider := price.NewCachedProvider(price.NewDemoProvider(), cacheStore, cfg.PriceCacheTTL)
 	priceService := price.NewService(priceProvider)
 	syncer := scheduler.NewPoolSyncer(reader, repo, cfg.ChainID, priceService, cfg.PriceSymbol, logger)

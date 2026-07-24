@@ -33,10 +33,19 @@ func main() {
 	}
 	defer closeStore()
 
-	reader := chain.NewDemoReader()
+	reader, err := chain.NewRPCReader(
+		context.Background(),
+		cfg.ChainRPCURL,
+		cfg.PoolAddress,
+	)
+	if err != nil {
+		logger.Error("open chain RPC reader failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer reader.Close()
 
 	if err := chain.SyncPools(context.Background(), reader, repo, cfg.ChainID); err != nil {
-		logger.Error("sync demo contract data failed", slog.Any("error", err))
+		logger.Error("sync contract data failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 

@@ -1,6 +1,8 @@
 x-prism-env: &prism-env
   PRISM_ENV: local
-  PRISM_CHAIN_ID: "97"
+  PRISM_CHAIN_ID: "31337"
+  PRISM_CHAIN_RPC_URL: http://host.docker.internal:8545
+  PRISM_POOL_ADDRESS: "${PRISM_POOL_ADDRESS:?set PRISM_POOL_ADDRESS to the latest local deployment address}"
   PRISM_API_VERSION: "1"
   PRISM_STORE: mysql
   PRISM_MYSQL_DSN: "prism:prism@tcp(mysql:3306)/prism_backend?parseTime=true&charset=utf8mb4&loc=Local"
@@ -23,6 +25,9 @@ services:
       PRISM_API_PORT: "8080"
     ports:
       - "8080:8080"
+    # Let the container reach the Hardhat RPC node running on the Docker host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mysql:
         condition: service_healthy
@@ -35,6 +40,9 @@ services:
     environment:
       <<: *prism-env
       PRISM_SYNC_INTERVAL: 30s
+    # Let the container reach the Hardhat RPC node running on the Docker host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mysql:
         condition: service_healthy

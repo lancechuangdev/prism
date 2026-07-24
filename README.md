@@ -3,24 +3,20 @@
 Prism is a fixed-rate lending protocol with an accompanying indexing and API
 backend. The repository contains two projects:
 
-- [`protocol`](./protocol) contains the Solidity contracts, Hardhat
-  configuration, and contract tests.
-- [`backend`](./backend) contains the Go API and scheduler, plus MySQL and Redis
-  infrastructure for indexed data and price caching.
+- [`protocol`](./protocol) contains the Solidity contracts, Hardhat configuration, and contract tests.
+- [`backend`](./backend) contains the Go API and scheduler, plus MySQL and Redis infrastructure for indexed data and price caching.
 
 ## Current integration status
 
-The protocol and backend are currently developed in the same repository but
-are not connected at runtime.
+The protocol and backend are connected through Ethereum RPC at runtime.
 
 - The contracts implement and test the lending lifecycle on Hardhat networks.
-- The backend's `chain.Reader` abstraction is ready for a contract adapter, but
-  both backend executables currently use an in-process `DemoReader`.
-- Backend prices currently come from `DemoProvider`, wrapped by a Redis-backed
-  cache.
+- A local deployment script deploys the protocol, configures its mock dependencies, and creates one seed pool on a persistent Hardhat node.
+- The backend has an RPC implementation of `chain.Reader` backed by generated Go bindings. It reads `poolCount`, pool snapshots, pool data, and ERC-20 `symbol` and `decimals`.
+- Both backend executables instantiate `RPCReader` from the configured RPC URL and deployed `PrismPool` address. `DemoReader` is used only by tests.
+- Backend prices currently come from `DemoProvider`, wrapped by a Redis-backed cache.
 
-A production integration still needs a chain RPC reader, deployed contract
-addresses and a real oracle or price-provider adapter.
+Production use still requires durable deployment addresses and real oracle, DEX, and provider adapters.
 
 ## System architecture
 
@@ -41,27 +37,23 @@ flowchart LR
     Scheduler[Scheduler] --> Sync
     Services --> Repository[Repository interface]
     Sync --> Repository
-    Services --> APICachedPrice[API cached price provider]
-    Scheduler --> SchedulerCachedPrice[Scheduler cached price provider]
+    Services --> APICachedPrice[API cached price provider adapter]
+    Scheduler --> SchedulerCachedPrice[Scheduler cached price provider adapter]
   end
 
   Repository --> MySQL[(MySQL)]
   APICachedPrice <--> Redis[(Redis)]
   SchedulerCachedPrice <--> Redis
-  APICachedPrice --> DemoPrice[Demo price provider]
+  APICachedPrice --> DemoPrice[External token price provider]
   SchedulerCachedPrice --> DemoPrice
-  DemoReader[Demo chain reader] --> Sync
-
-  Pool -.->|future RPC reader| Sync
+  Pool -->|RPCReader| Sync
 ```
 
-The dotted path represents the intended contract integration. In the current
-backend, `DemoReader` supplies pool and token snapshots instead.
+Both backend processes read contract snapshots through the RPC adapter and generated Go bindings. The API syncs once during startup; the scheduler syncs once during startup and then at `PRISM_SYNC_INTERVAL`.
 
 ## Protocol
 
-The protocol is built with Solidity 0.8.28, Hardhat 3, ethers 6, and
-OpenZeppelin Contracts.
+The protocol is built with Solidity 0.8.28, Hardhat 3, ethers 6, and OpenZeppelin Contracts.
 
 ### Contracts
 
@@ -107,26 +99,47 @@ suite covers pool creation, deposits, settlement, refunds, claims, repayment,
 liquidation, position tokens, the mock oracle, fixed-rate swaps, and multisig
 administration.
 
+### Deploy the protocol locally
+
+Start a persistent Hardhat node:
+
+```bash
+cd protocol
+npm run node
+```
+
+In a second terminal, deploy the protocol and create one seed pool:
+
+```bash
+cd protocol
+npm run deploy:local
+```
+
+The deployment output includes the local RPC URL, chain ID, and deployed
+`PrismPool` address. Addresses change whenever the local node is restarted.
+
 Hardhat also defines simulated L1 and OP networks and an HTTP Sepolia network.
-Sepolia requires `SEPOLIA_RPC_URL` and `SEPOLIA_PRIVATE_KEY`, but a Prism
-deployment module still needs to be added before deploying the system.
+Sepolia requires `SEPOLIA_RPC_URL` and `SEPOLIA_PRIVATE_KEY`; the current
+deployment script targets only the local persistent node.
 
 See [`protocol/README.md`](./protocol/README.md) for the contract-focused
-lifecycle notes.
+lifecycle, local deployment, ABI extraction, and Go binding generation notes.
 
 ## Backend
 
 The backend is a Go module with two executables:
 
-- `cmd/api` performs an initial pool sync, serves public and protected HTTP
-  endpoints, and shuts down gracefully on `SIGINT` or `SIGTERM`.
-- `cmd/scheduler` performs an initial sync and repeats it according to
-  `PRISM_SYNC_INTERVAL`.
+- `cmd/api` performs an initial pool sync, serves public and protected HTTP endpoints, and shuts down gracefully on `SIGINT` or `SIGTERM`.
+- `cmd/scheduler` performs an initial sync and repeats it according to `PRISM_SYNC_INTERVAL`.
 
-Both processes can use an in-memory repository or MySQL. They use Redis for
-price caching and currently fetch cache misses from the demo price provider.
-When both processes use MySQL, the scheduler's indexed snapshots are visible
-to the API.
+Both processes can use an in-memory repository or MySQL. They use Redis for price caching and currently fetch cache misses from the demo price provider.
+When both processes use MySQL, the scheduler's indexed snapshots are visible to the API.
+
+The backend also contains:
+
+- `internal/chain/rpc_reader.go`, which implements `chain.Reader` through Ethereum JSON-RPC;
+- generated `PrismPool` and ERC-20 bindings in `internal/contracts`; and
+- an in-process RPC test that verifies ABI encoding and decoding without a running Hardhat node.
 
 ### Run the complete backend stack
 
@@ -134,8 +147,11 @@ Docker Compose is the shortest path because it supplies MySQL and Redis:
 
 ```bash
 cd backend
-docker compose up --build
+PRISM_POOL_ADDRESS=0x... docker compose up --build
 ```
+
+Start the local Hardhat node and run `npm run deploy:local` first. Replace
+`0x...` with the `prismPool` address printed by the deployment command.
 
 This starts four containers:
 
@@ -150,7 +166,7 @@ Check the running API:
 
 ```bash
 curl http://localhost:8080/healthz
-curl "http://localhost:8080/api/v1/poolBaseInfo?chainId=97"
+curl "http://localhost:8080/api/v1/poolBaseInfo?chainId=31337"
 curl "http://localhost:8080/api/v1/price?symbol=PRM"
 ```
 
@@ -203,7 +219,9 @@ Do not use the Compose credentials or token secret in a public environment.
 | `PRISM_ENV` | `local` | Logging/runtime environment. |
 | `PRISM_API_PORT` | `8080` | API listen port. |
 | `PRISM_API_VERSION` | `1` | Version used in the `/api/v{n}` route prefix. |
-| `PRISM_CHAIN_ID` | `97` | Chain identifier used for indexed records. |
+| `PRISM_CHAIN_ID` | `31337` | Expected RPC chain ID and identifier used for indexed records. |
+| `PRISM_CHAIN_RPC_URL` | `http://127.0.0.1:8545` | Ethereum JSON-RPC endpoint. |
+| `PRISM_POOL_ADDRESS` | empty | Required deployed `PrismPool` contract address. |
 | `PRISM_SYNC_INTERVAL` | `2m` | Scheduler synchronization interval. |
 | `PRISM_STORE` | `memory` | Repository driver: `memory` or `mysql`. |
 | `PRISM_MYSQL_DSN` | empty | MySQL connection string. |
@@ -240,6 +258,7 @@ go test ./...
     ├── cmd/api/         API executable
     ├── cmd/scheduler/   Scheduler executable
     ├── internal/        Services, adapters, storage, cache, and HTTP server
+    │   └── contracts/   Generated Go contract bindings
     ├── Dockerfile       Multi-stage Go image
     └── docker-compose.yml
 ```

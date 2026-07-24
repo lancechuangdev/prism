@@ -11,7 +11,8 @@ const (
 	defaultEnv         = "local"
 	defaultPort        = "8080"
 	defaultAPIVersion  = "1"
-	defaultChainId     = "97"
+	defaultChainId     = "31337"
+	defaultChainRPCURL = "http://127.0.0.1:8545"
 	defaultSyncEvery   = 2 * time.Minute
 	defaultAdminUser   = "admin"
 	defaultAdminPass   = "password"
@@ -28,6 +29,8 @@ type Config struct {
 	Port          string
 	APIVersion    string
 	ChainID       string
+	ChainRPCURL   string
+	PoolAddress   string
 	SyncInterval  time.Duration
 	AdminUsername string
 	AdminPassword string
@@ -48,6 +51,8 @@ func Load() Config {
 		Port:          readEnv("PRISM_API_PORT", defaultPort),
 		APIVersion:    readEnv("PRISM_API_VERSION", defaultAPIVersion),
 		ChainID:       readEnv("PRISM_CHAIN_ID", defaultChainId),
+		ChainRPCURL:   readEnv("PRISM_CHAIN_RPC_URL", defaultChainRPCURL),
+		PoolAddress:   readEnv("PRISM_POOL_ADDRESS", ""),
 		SyncInterval:  readDurationEnv("PRISM_SYNC_INTERVAL", defaultSyncEvery),
 		AdminUsername: readEnv("PRISM_ADMIN_USERNAME", defaultAdminUser),
 		AdminPassword: readEnv("PRISM_ADMIN_PASSWORD", defaultAdminPass),
