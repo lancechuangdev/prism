@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/lancechuangdev/prism/backend/internal/auth"
+	"github.com/lancechuangdev/prism/backend/internal/chain"
 	"github.com/lancechuangdev/prism/backend/internal/config"
 	"github.com/lancechuangdev/prism/backend/internal/multisig"
 	"github.com/lancechuangdev/prism/backend/internal/price"
@@ -75,7 +76,7 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func New(cfg config.Config, logger *slog.Logger, repo store.Repository, authService *auth.Service, priceService *price.Service, multisigService *multisig.Service) *http.Server {
+func New(cfg config.Config, logger *slog.Logger, chainService *chain.Service, authService *auth.Service, priceService *price.Service, multisigService *multisig.Service) *http.Server {
 	mux := http.NewServeMux()
 	apiPrefix := "/api/v" + strings.TrimPrefix(cfg.APIVersion, "v")
 
@@ -92,7 +93,7 @@ func New(cfg config.Config, logger *slog.Logger, repo store.Repository, authServ
 			return
 		}
 
-		pools, err := repo.ListPoolBases(r.Context(), chainID)
+		pools, err := chainService.ListPoolBases(r.Context(), chainID)
 		if err != nil {
 			logger.Error("list pool base info failed", slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "list pool base info failed"})
@@ -115,7 +116,7 @@ func New(cfg config.Config, logger *slog.Logger, repo store.Repository, authServ
 			return
 		}
 
-		pools, err := repo.ListPoolData(r.Context(), chainID)
+		pools, err := chainService.ListPoolData(r.Context(), chainID)
 		if err != nil {
 			logger.Error("list pool data info failed", slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "list pool data info failed"})
@@ -138,7 +139,7 @@ func New(cfg config.Config, logger *slog.Logger, repo store.Repository, authServ
 			return
 		}
 
-		tokens, err := repo.ListTokens(r.Context(), chainID)
+		tokens, err := chainService.ListTokens(r.Context(), chainID)
 		if err != nil {
 			logger.Error("list tokens failed", slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "list tokens failed"})

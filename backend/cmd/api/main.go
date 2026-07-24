@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lancechuangdev/prism/backend/internal/auth"
+	"github.com/lancechuangdev/prism/backend/internal/cache"
 	"github.com/lancechuangdev/prism/backend/internal/chain"
 	"github.com/lancechuangdev/prism/backend/internal/config"
 	"github.com/lancechuangdev/prism/backend/internal/httpserver"
@@ -46,9 +47,18 @@ func main() {
 		TokenTTL:      cfg.TokenTTL,
 	})
 
-	priceService := price.NewService(price.NewDemoProvider())
+	cacheStore, closeCache, err := openCache(context.Background(), cfg)
+	if err != nil {
+		logger.Error("open cache failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer closeCache()
+
+	chainService := chain.NewService(repo)
+	priceProvider := price.NewCachedProvider(price.NewDemoProvider(), cacheStore, cfg.PriceCacheTTL)
+	priceService := price.NewService(priceProvider)
 	multisigService := multisig.NewService(repo)
-	server := httpserver.New(cfg, logger, repo, authService, priceService, multisigService)
+	server := httpserver.New(cfg, logger, chainService, authService, priceService, multisigService)
 
 	go func() {
 		logger.Info("api server starting", slog.String("addr", server.Addr))
@@ -75,6 +85,18 @@ func openStore(ctx context.Context, cfg config.Config) (store.Repository, func()
 		return nil, nil, fmt.Errorf("unsupported store driver %q", cfg.StoreDriver)
 	}
 
+}
+
+func openCache(ctx context.Context, cfg config.Config) (cache.Cache, func(), error) {
+	redisCache, err := cache.OpenRedis(ctx, cache.RedisConfig{
+		Address:  cfg.RedisAddress,
+		Password: cfg.RedisPassword,
+		DB:       cfg.RedisDB,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return redisCache, func() { _ = redisCache.Close() }, nil
 }
 
 func waitForShutdown(server *http.Server, logger *slog.Logger) {

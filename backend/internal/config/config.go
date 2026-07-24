@@ -28,7 +28,7 @@ type Config struct {
 	Port          string
 	APIVersion    string
 	ChainID       string
-	SyncInteral   time.Duration
+	SyncInterval  time.Duration
 	AdminUsername string
 	AdminPassword string
 	TokenSecret   string
@@ -48,7 +48,7 @@ func Load() Config {
 		Port:          readEnv("PRISM_API_PORT", defaultPort),
 		APIVersion:    readEnv("PRISM_API_VERSION", defaultAPIVersion),
 		ChainID:       readEnv("PRISM_CHAIN_ID", defaultChainId),
-		SyncInteral:   readDurationEnv("PRISM_SYNC_INTERVAL", defaultSyncEvery),
+		SyncInterval:  readDurationEnv("PRISM_SYNC_INTERVAL", defaultSyncEvery),
 		AdminUsername: readEnv("PRISM_ADMIN_USERNAME", defaultAdminUser),
 		AdminPassword: readEnv("PRISM_ADMIN_PASSWORD", defaultAdminPass),
 		TokenSecret:   readEnv("PRISM_TOKEN_SECRET", defaultTokenSecret),

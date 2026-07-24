@@ -1,22 +1,67 @@
-# Prism backend
+# Prism Backend
 
-The backend consists of:
+The Prism backend is a Go service that exposes pool, token, price, authentication, and multisignature-management APIs.
+It contains two executables:
 
-- API server: serve frontend/admin HTTP APIs, token list, pool data, login, websocket price push.
+- `cmd/api` starts the HTTP server. On startup, it reads chain data and stores a snapshot in the configured repository (`memory` or `mysql`). Pool and token requests read that indexed data through the chain query service.
+- `cmd/scheduler` periodically reads chain data, writes it to the configured repository, and refreshes the configured price quote through a Redis-backed cache.
 
-- Scheduler worker: read on-chain pool/oracle data and save snapshots into data store.
+Selecting MySQL for both executables gives the API and scheduler a shared, persistent repository.
+
+Both executables use Redis to cache price quotes for the configured TTL. On a
+cache miss, the cached provider fetches a fresh quote from the underlying price
+provider.
+
+Docker Compose runs the API, scheduler, MySQL, and Redis as separate containers on a shared network.
 
 ```mermaid
 flowchart LR
-  Contract[PrismPool] --> Scheduler[Scheduler worker]
-  Contract --> APIBootstrap[API startup sync]
-  Scheduler --> Store[(MySQL store)]
-  APIBootstrap --> Store
-  Price[Oracle reader] --> Cache[(Redis cache)]
-  Cache --> API[API server]
-  Scheduler --> Cache
-  Store --> API
-  API --> Frontend[Frontend / curl]
+  Client[Frontend] -->|public requests| Routes
+  Client -->|protected requests| AuthMiddleware
+
+  subgraph APIProcess[API process]
+    direction TB
+    subgraph HTTPAPI[HTTP layer]
+      AuthMiddleware[Auth middleware]
+      Routes[Route handlers]
+      AuthMiddleware -->|authorized request| Routes
+    end
+
+    subgraph APIServices[Service layer]
+      Auth[Auth service]
+      ChainService[Chain query service]
+      MultiSig[Multisig service]
+      PriceService[Token Price service]
+    end
+
+    subgraph APIData[Data-access layer]
+      APIRepo[Repository interface]
+      APICachedProvider[Cached price provider]
+    end
+
+    Routes -->|login and logout| Auth
+    AuthMiddleware -->|validate token| Auth
+    Routes --> ChainService
+    Routes --> MultiSig
+    Routes --> PriceService
+    ChainService -->|pool and token queries| APIRepo
+    MultiSig --> APIRepo
+    PriceService --> APICachedProvider
+    DemoChainA[chain reader] -->|startup sync| APIRepo
+  end
+
+  subgraph SchedulerProcess[Scheduler process]
+    Scheduler[Scheduler worker] -->|periodic sync| SchedulerRepo[Repository interface]
+    DemoChainS[chain reader] --> Scheduler
+    Scheduler --> SchedulerCachedProvider[Cached price provider]
+  end
+
+  APICachedProvider --> OracleAdapter[Oracle adapter]
+  SchedulerCachedProvider --> OracleAdapter[Oracle adapter]
+  APIRepo --> MySQL
+  SchedulerRepo --> MySQL
+  APICachedProvider <--> Redis
+  SchedulerCachedProvider <--> Redis
 ```
 
 ## API Endpoints
@@ -61,7 +106,9 @@ The `/api/v1` prefix uses `PRISM_API_VERSION=1`.
 
 ## Cache
 
-It uses Redis for runtime caching. Currently Redis caches price quotes such as `price:PRM`.
+The API and scheduler use Redis to cache price quotes under keys such as
+`price:PRM`. On a cache miss, they fetch the quote from the underlying provider
+and store it for `PRISM_PRICE_CACHE_TTL`.
 
 Redis config:
 
@@ -72,7 +119,7 @@ PRISM_REDIS_DB=0
 PRISM_PRICE_CACHE_TTL=30s
 ```
 
-Run API with Redis cache:
+Run either process with Redis cache:
 
 ```bash
 cd backend
@@ -80,12 +127,7 @@ PRISM_REDIS_ADDR=127.0.0.1:6379 \
 PRISM_PRICE_CACHE_TTL=30s \
 PRISM_API_PORT=8080 \
 go run ./cmd/api
-```
 
-Run scheduler with Redis cache:
-
-```bash
-cd backend
 PRISM_REDIS_ADDR=127.0.0.1:6379 \
 PRISM_PRICE_CACHE_TTL=30s \
 PRISM_SYNC_INTERVAL=30s \
@@ -106,13 +148,15 @@ The backend supports two storage modes:
 PRISM_STORE=memory
 ```
 
-Use in-memory storage for tests, and quick local API runs. API and scheduler processes do not share memory with each other.
+Use in-memory storage for tests and quick local runs. Each process owns a
+separate in-memory repository, so the API and scheduler do not share state in
+this mode.
 
 ```text
 PRISM_STORE=mysql
 ```
 
-Use MySQL to keep API and scheduler processes to share the same indexed state.
+Use MySQL so the API and scheduler share persistent indexed state.
 
 Example MySQL DSN:
 
@@ -348,10 +392,8 @@ reader can implement the same `chain.Reader` interface.
 - Run one sync immediately, then repeat on `PRISM_SYNC_INTERVAL`.
 - Keep failures isolated to one sync attempt so the worker can keep running.
 
-```text
-The scheduler currently writes to an in-memory repository. 
-MySQL will be added later.
-```
+The scheduler selects its repository with `PRISM_STORE`. Memory is the default;
+select MySQL when its snapshots must be shared with the API.
 
 Files:
 

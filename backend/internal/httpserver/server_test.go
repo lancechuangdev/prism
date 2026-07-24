@@ -285,7 +285,7 @@ func newTestServer(t *testing.T) *http.Server {
 	return New(
 		config.Config{Env: "test", Port: "0", APIVersion: "1"},
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
-		repo,
+		chain.NewService(repo),
 		auth,
 		price.NewService(price.NewDemoProvider()),
 		multisig.NewService(repo),
