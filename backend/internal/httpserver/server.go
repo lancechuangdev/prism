@@ -3,6 +3,7 @@ package httpserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -72,11 +73,24 @@ type getMultiSignRequest struct {
 	ChainID string `json:"chain_id"`
 }
 
+type createPoolRequest struct {
+	SettleTime             string `json:"settleTime"`
+	MaturityTime           string `json:"maturityTime"`
+	InterestRate           string `json:"interestRate"`
+	MaxLendSupply          string `json:"maxLendSupply"`
+	CollateralizationRatio string `json:"collateralizationRatio"`
+	LendToken              string `json:"lendToken"`
+	CollateralToken        string `json:"collateralToken"`
+	LenderPositionToken    string `json:"lenderPositionToken"`
+	BorrowerPositionToken  string `json:"borrowerPositionToken"`
+	LiquidateRate          string `json:"liquidateRate"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func New(cfg config.Config, logger *slog.Logger, chainService *chain.Service, authService *auth.Service, priceService *price.Service, multisigService *multisig.Service) *http.Server {
+func New(cfg config.Config, logger *slog.Logger, chainQueryService *chain.QueryService, poolTransactions chain.PoolTransactionPreparer, authService *auth.Service, priceService *price.Service, multisigService *multisig.Service) *http.Server {
 	mux := http.NewServeMux()
 	apiPrefix := "/api/v" + strings.TrimPrefix(cfg.APIVersion, "v")
 
@@ -93,7 +107,7 @@ func New(cfg config.Config, logger *slog.Logger, chainService *chain.Service, au
 			return
 		}
 
-		pools, err := chainService.ListPoolBases(r.Context(), chainID)
+		pools, err := chainQueryService.ListPoolBases(r.Context(), chainID)
 		if err != nil {
 			logger.Error("list pool base info failed", slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "list pool base info failed"})
@@ -116,7 +130,7 @@ func New(cfg config.Config, logger *slog.Logger, chainService *chain.Service, au
 			return
 		}
 
-		pools, err := chainService.ListPoolData(r.Context(), chainID)
+		pools, err := chainQueryService.ListPoolData(r.Context(), chainID)
 		if err != nil {
 			logger.Error("list pool data info failed", slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "list pool data info failed"})
@@ -139,7 +153,7 @@ func New(cfg config.Config, logger *slog.Logger, chainService *chain.Service, au
 			return
 		}
 
-		tokens, err := chainService.ListTokens(r.Context(), chainID)
+		tokens, err := chainQueryService.ListTokens(r.Context(), chainID)
 		if err != nil {
 			logger.Error("list tokens failed", slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "list tokens failed"})
@@ -193,6 +207,37 @@ func New(cfg config.Config, logger *slog.Logger, chainService *chain.Service, au
 
 		writeJSON(w, http.StatusOK, priceResponse{Data: quote})
 	})
+
+	mux.Handle("POST "+apiPrefix+"/pools", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := createPoolRequest{}
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid create pool body"})
+			return
+		}
+
+		result, err := poolTransactions.PrepareCreatePool(r.Context(), chain.CreatePoolParams{
+			SettleTime: req.SettleTime, MaturityTime: req.MaturityTime,
+			InterestRate: req.InterestRate, MaxLendSupply: req.MaxLendSupply,
+			CollateralizationRatio: req.CollateralizationRatio,
+			LendToken:              req.LendToken, CollateralToken: req.CollateralToken,
+			LenderPositionToken:   req.LenderPositionToken,
+			BorrowerPositionToken: req.BorrowerPositionToken,
+			LiquidateRate:         req.LiquidateRate,
+		})
+		if err != nil {
+			if errors.Is(err, chain.ErrInvalidCreatePool) {
+				writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+				return
+			}
+			logger.Error("prepare create pool transaction failed", slog.Any("error", err))
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "prepare create pool transaction failed"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, dataResponse[chain.PreparedTransaction]{Data: result})
+	})))
 
 	mux.Handle("POST "+apiPrefix+"/pool/setMultiSign", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		req := setMultiSignRequest{}

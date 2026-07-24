@@ -7,14 +7,14 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
 
-func TestServiceListsPoolsAndTokens(t *testing.T) {
+func TestQueryServiceListsPoolsAndTokens(t *testing.T) {
 	ctx := context.Background()
 	repo := store.NewMemoryStore()
 	if err := SyncPools(ctx, NewDemoReader(), repo, "97"); err != nil {
 		t.Fatalf("sync pools: %v", err)
 	}
 
-	service := NewService(repo)
+	service := NewQueryService(repo)
 
 	poolBases, err := service.ListPoolBases(ctx, "97")
 	if err != nil {

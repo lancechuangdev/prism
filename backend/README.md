@@ -101,6 +101,7 @@ Protected admin APIs:
 
 ```text
 GET  /api/v1/admin/session
+POST /api/v1/pools
 POST /api/v1/pool/setMultiSign
 POST /api/v1/pool/getMultiSign
 ```
@@ -139,6 +140,34 @@ PRISM_POOL_ADDRESS=0x...
 
 The API and scheduler fail at startup when the RPC connection, chain ID, or
 pool address is invalid.
+
+### Create a pool
+
+Log in and pass the returned token as `Authorization: Bearer <tokenId>`. Then
+submit positive base-10 integer strings for every Solidity `uint256`:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/pools \
+  -H "Authorization: Bearer $TOKEN_ID" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "settleTime": "2000000000",
+    "maturityTime": "2000600000",
+    "interestRate": "1000000",
+    "maxLendSupply": "1000000000000000000000",
+    "collateralizationRatio": "200000000",
+    "lendToken": "0x...",
+    "collateralToken": "0x...",
+    "lenderPositionToken": "0x...",
+    "borrowerPositionToken": "0x...",
+    "liquidateRate": "20000000"
+  }'
+```
+
+The API returns an unsigned transaction containing `to`, `data`, `value`, and
+`chainId`. A user wallet must sign and broadcast it. The contract still
+requires the signing wallet to be the current `PrismPool` owner. The backend
+does not receive or store a private key.
 
 ## Cache
 
@@ -248,7 +277,8 @@ Run the stack with API, scheduler, MySQL, and Redis:
 
 ```bash
 cd backend
-PRISM_POOL_ADDRESS=0x... docker compose up --build
+PRISM_POOL_ADDRESS=0x... \
+docker compose up --build
 ```
 
 Compose connects the API and scheduler to the Hardhat node running on the host

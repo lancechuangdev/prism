@@ -147,10 +147,12 @@ Docker Compose is the shortest path because it supplies MySQL and Redis:
 
 ```bash
 cd backend
-PRISM_POOL_ADDRESS=0x... docker compose up --build
+PRISM_POOL_ADDRESS=0x... \
+docker compose up --build
 ```
 
-Start the local Hardhat node with `--hostname 0.0.0.0` and run `npm run deploy:local` first. Replace `0x...` with the `prismPool` address printed by the deployment command.
+Start the local Hardhat node with `--hostname 0.0.0.0` and run
+`npm run deploy:local` first. Use its `prismPool` address.
 
 The containers resolve `host.docker.internal` to the host-side Docker gateway, commonly `172.17.0.1` on Linux. Hardhat must listen on that interface; its default `127.0.0.1` binding accepts host-loopback connections only. Binding to `0.0.0.0` is intended for local development and may expose the development node to the local network, depending on the host firewall.
 
@@ -195,6 +197,7 @@ docker compose down -v
 | `POST` | `/api/v1/user/login` | Public |
 | `POST` | `/api/v1/user/logout` | Bearer token |
 | `GET` | `/api/v1/admin/session` | Bearer token |
+| `POST` | `/api/v1/pools` | Bearer token; prepares unsigned `createPool` calldata |
 | `POST` | `/api/v1/pool/setMultiSign` | Bearer token |
 | `POST` | `/api/v1/pool/getMultiSign` | Bearer token |
 

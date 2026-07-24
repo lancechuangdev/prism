@@ -49,6 +49,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	poolTransactions, err := chain.NewPoolTransactionBuilder(cfg.ChainID, cfg.PoolAddress)
+	if err != nil {
+		logger.Error("configure pool transaction builder failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+
 	authService := auth.NewService(auth.Config{
 		AdminUsername: cfg.AdminUsername,
 		AdminPassword: cfg.AdminPassword,
@@ -63,11 +69,11 @@ func main() {
 	}
 	defer closeCache()
 
-	chainService := chain.NewService(repo)
+	chainQueryService := chain.NewQueryService(repo)
 	priceProvider := price.NewCachedProvider(price.NewDemoProvider(), cacheStore, cfg.PriceCacheTTL)
 	priceService := price.NewService(priceProvider)
 	multisigService := multisig.NewService(repo)
-	server := httpserver.New(cfg, logger, chainService, authService, priceService, multisigService)
+	server := httpserver.New(cfg, logger, chainQueryService, poolTransactions, authService, priceService, multisigService)
 
 	go func() {
 		logger.Info("api server starting", slog.String("addr", server.Addr))
