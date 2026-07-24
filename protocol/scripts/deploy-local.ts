@@ -1,3 +1,7 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { network } from "hardhat";
 
 const { ethers } = await network.create();
@@ -39,12 +43,8 @@ await Promise.all([
 ]);
 
 const poolAddress = await pool.getAddress();
-await (
-  await lenderPositionToken.setMinter(poolAddress, true)
-).wait();
-await (
-  await borrowerPositionToken.setMinter(poolAddress, true)
-).wait();
+await (await lenderPositionToken.setMinter(poolAddress, true)).wait();
+await (await borrowerPositionToken.setMinter(poolAddress, true)).wait();
 
 const lendTokenAddress = await lendToken.getAddress();
 const collateralTokenAddress = await collateralToken.getAddress();
@@ -77,23 +77,31 @@ await (
 ).wait();
 
 const chain = await ethers.provider.getNetwork();
+const deployment = {
+  rpcUrl: "http://127.0.0.1:8545",
+  chainId: chain.chainId.toString(),
+  deployer: deployer.address,
+  prismPool: poolAddress,
+  oracle: await oracle.getAddress(),
+  dexSwap: await swap.getAddress(),
+  lendToken: lendTokenAddress,
+  collateralToken: collateralTokenAddress,
+  lenderPositionToken: await lenderPositionToken.getAddress(),
+  borrowerPositionToken: await borrowerPositionToken.getAddress(),
+  poolCount: (await pool.poolCount()).toString(),
+};
 
-console.log(
-  JSON.stringify(
-    {
-      rpcUrl: "http://127.0.0.1:8545",
-      chainId: chain.chainId.toString(),
-      deployer: deployer.address,
-      prismPool: poolAddress,
-      oracle: await oracle.getAddress(),
-      dexSwap: await swap.getAddress(),
-      lendToken: lendTokenAddress,
-      collateralToken: collateralTokenAddress,
-      lenderPositionToken: await lenderPositionToken.getAddress(),
-      borrowerPositionToken: await borrowerPositionToken.getAddress(),
-      poolCount: (await pool.poolCount()).toString(),
-    },
-    null,
-    2,
-  ),
+const protocolRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
 );
+const deploymentPath = path.join(protocolRoot, "deployments", "local.json");
+await mkdir(path.dirname(deploymentPath), { recursive: true });
+await writeFile(
+  deploymentPath,
+  `${JSON.stringify(deployment, null, 2)}\n`,
+  "utf8",
+);
+
+console.log(JSON.stringify(deployment, null, 2));
+console.log(`Deployment addresses saved to ${deploymentPath}`);

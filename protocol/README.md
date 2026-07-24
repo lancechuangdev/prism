@@ -68,7 +68,7 @@ The deployment script uses the optimized production build and deploys:
 
 It authorizes `PrismPool` to mint the position tokens, configures local oracle prices, and creates one pool in the `FUNDING` state.
 
-The command prints a JSON object containing the values needed by an RPC client, including:
+The command prints a JSON object containing the values needed by an RPC client and saves the same object to the generated `deployments/local.json` file:
 
 ```json
 {
@@ -78,7 +78,40 @@ The command prints a JSON object containing the values needed by an RPC client, 
 }
 ```
 
-Contract addresses belong to the running local node. Restarting `npm run node` resets its chain state, so run `npm run deploy:local` again and use the newly printed addresses.
+Contract addresses belong to the running local node. Restarting `npm run node` resets its chain state, so run `npm run deploy:local` again and use the newly generated addresses. The local deployment file is ignored by Git because its addresses are only valid for that running node.
+
+To pass the generated pool address to the Docker backend:
+
+```bash
+export PRISM_POOL_ADDRESS="$(
+  jq -r '.prismPool' protocol/deployments/local.json
+)"
+docker compose up --build
+```
+
+## Create a pool through the API
+
+With the local node, API, and scheduler running, automate the complete non-custodial pool-creation workflow:
+
+```bash
+cd protocol
+npm run create-pool:api
+```
+
+The script reads `deployments/local.json`, logs in to the backend, and calls `POST /api/v1/pools` to obtain unsigned `createPool` calldata. It verifies the target contract and chain, signs with the first local Hardhat account (the deployed pool owner), broadcasts the transaction, waits for confirmation, and then waits for the scheduler to make the new pool visible through `GET /api/v1/poolBaseInfo`.
+
+The defaults match the local development configuration. Override them when needed:
+
+```bash
+PRISM_API_URL=http://127.0.0.1:8080 \
+PRISM_ADMIN_USERNAME=admin \
+PRISM_ADMIN_PASSWORD=password \
+PRISM_INDEX_TIMEOUT_MS=90000 \
+npm run create-pool:api
+```
+
+This script is for local development: the well-known Hardhat account owns the local deployment. In a real frontend, the user's wallet should validate and
+sign the API's prepared transaction instead.
 
 ## Generate the Go contract bindings
 
@@ -130,9 +163,7 @@ abigen \
 Format and verify the generated code:
 
 ```bash
-gofmt -w \
-  backend/internal/contracts/prism_pool.go \
-  backend/internal/contracts/erc20_token.go
+go fmt -w backend/internal/contracts/prism_pool.go
 
 cd backend
 go test ./...

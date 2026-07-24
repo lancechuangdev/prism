@@ -16,6 +16,9 @@
 # Typechain output
 /types
 
+# Generated local deployment addresses
+/deployments/local.json
+
 # Environment files
 .env
 .env.*
