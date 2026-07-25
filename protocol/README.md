@@ -62,6 +62,7 @@ The deployment script uses the optimized production build and deploys:
 
 - `MockOracle`
 - `FixedRateSwap`
+- `ThresholdMultiSig` with three local owners and a threshold of two
 - lend and collateral tokens
 - lender and borrower position tokens
 - `PrismPool`
@@ -74,7 +75,8 @@ The command prints a JSON object containing the values needed by an RPC client a
 {
   "rpcUrl": "http://127.0.0.1:8545",
   "chainId": "31337",
-  "prismPool": "0x..."
+  "prismPool": "0x...",
+  "multisig": "0x..."
 }
 ```
 
@@ -112,6 +114,12 @@ npm run create-pool:api
 
 This script is for local development: the well-known Hardhat account owns the local deployment. In a real frontend, the user's wallet should validate and
 sign the API's prepared transaction instead.
+
+## Multisig administration
+
+`ThresholdMultiSig` supports `addOwner`,`removeOwner`, `replaceOwner`, and `changeThreshold`. These functions use `onlySelf`, so no owner can call them directly. Owners must approve identical transaction parameters targeting the multisig itself, after which an owner executes the approved transaction.
+
+Every owner or threshold update increments `configurationVersion`. The version is part of the transaction hash, which invalidates pending approvals created under an earlier owner configuration.
 
 ## Generate the Go contract bindings
 

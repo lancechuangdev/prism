@@ -5,6 +5,7 @@ contract ThresholdMultiSig {
     // Defines who can approve and how many approvals are required
     address[] private owners;
     uint256 public threshold;
+    uint256 public configurationVersion;
     mapping(address => bool) public isOwner;
 
     // Tracks the approval status of each transaction.
@@ -15,10 +16,19 @@ contract ThresholdMultiSig {
     // Events
     event TransactionApproved(bytes32 indexed txHash, address indexed owner, uint256 approvalCount);
     event TransactionExecuted(bytes32 indexed txHash, address indexed executor, address indexed target);
+    event OwnerAdded(address indexed owner);
+    event OwnerRemoved(address indexed owner);
+    event OwnerReplaced(address indexed oldOwner, address indexed newOwner);
+    event ThresholdChanged(uint256 oldThreshold, uint256 newThreshold);
 
     // Modifiers
     modifier onlyOwner() {
         require(isOwner[msg.sender], "Not an owner");
+        _;
+    }
+
+    modifier onlySelf() {
+        require(msg.sender == address(this), "Only multisig");
         _;
     }
 
@@ -47,12 +57,65 @@ contract ThresholdMultiSig {
         return owners[index];
     }
 
+    function addOwner(address owner) external onlySelf {
+        require(owner != address(0), "Invalid owner");
+        require(!isOwner[owner], "Owner not unique");
+
+        isOwner[owner] = true;
+        owners.push(owner);
+        configurationVersion += 1;
+
+        emit OwnerAdded(owner);
+    }
+
+    function removeOwner(address owner) external onlySelf {
+        require(isOwner[owner], "Not an owner");
+        require(owners.length > 1, "Owners required");
+        require(threshold <= owners.length - 1, "Threshold exceeds owner count");
+
+        uint256 ownerIndex = _ownerIndex(owner);
+        uint256 lastIndex = owners.length - 1;
+        if (ownerIndex != lastIndex) {
+            owners[ownerIndex] = owners[lastIndex];
+        }
+        owners.pop();
+        isOwner[owner] = false;
+        configurationVersion += 1;
+
+        emit OwnerRemoved(owner);
+    }
+
+    function replaceOwner(address oldOwner, address newOwner) external onlySelf {
+        require(isOwner[oldOwner], "Not an owner");
+        require(newOwner != address(0), "Invalid owner");
+        require(!isOwner[newOwner], "Owner not unique");
+
+        owners[_ownerIndex(oldOwner)] = newOwner;
+        isOwner[oldOwner] = false;
+        isOwner[newOwner] = true;
+        configurationVersion += 1;
+
+        emit OwnerReplaced(oldOwner, newOwner);
+    }
+
+    function changeThreshold(uint256 newThreshold) external onlySelf {
+        require(newThreshold > 0 && newThreshold <= owners.length, "Invalid threshold");
+
+        uint256 oldThreshold = threshold;
+        threshold = newThreshold;
+        configurationVersion += 1;
+
+        emit ThresholdChanged(oldThreshold, newThreshold);
+    }
+
     function getTransactionHash(address target, uint256 value, bytes calldata data, uint256 nonce)
         public
         view
         returns (bytes32)
     {
-        return keccak256(abi.encode(address(this), block.chainid, target, value, keccak256(data), nonce));
+        return keccak256(
+            abi.encode(address(this), block.chainid, configurationVersion, target, value, keccak256(data), nonce)
+        );
     }
 
     function approveTransaction(address target, uint256 value, bytes calldata data, uint256 nonce)
@@ -88,6 +151,15 @@ contract ThresholdMultiSig {
         require(success, "Transaction execution failed");
 
         emit TransactionExecuted(txHash, msg.sender, target);
+    }
+
+    function _ownerIndex(address owner) private view returns (uint256) {
+        for (uint256 i = 0; i < owners.length; i++) {
+            if (owners[i] == owner) {
+                return i;
+            }
+        }
+        revert("Not an owner");
     }
 
     // receive() runs when ETH arrives with empty calldata

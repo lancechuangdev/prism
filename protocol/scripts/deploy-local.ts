@@ -5,10 +5,14 @@ import { fileURLToPath } from "node:url";
 import { network } from "hardhat";
 
 const { ethers } = await network.create();
-const [deployer, feeRecipient] = await ethers.getSigners();
+const [deployer, feeRecipient, thirdMultisigOwner] = await ethers.getSigners();
 
 const oracle = await ethers.deployContract("MockOracle");
 const swap = await ethers.deployContract("FixedRateSwap");
+const multisig = await ethers.deployContract("ThresholdMultiSig", [
+  [deployer.address, feeRecipient.address, thirdMultisigOwner.address],
+  2,
+]);
 const lendToken = await ethers.deployContract("PositionToken", [
   "Prism USD",
   "pUSD",
@@ -35,6 +39,7 @@ const pool = await ethers.deployContract("PrismPool", [
 await Promise.all([
   oracle.waitForDeployment(),
   swap.waitForDeployment(),
+  multisig.waitForDeployment(),
   lendToken.waitForDeployment(),
   collateralToken.waitForDeployment(),
   lenderPositionToken.waitForDeployment(),
@@ -84,6 +89,13 @@ const deployment = {
   prismPool: poolAddress,
   oracle: await oracle.getAddress(),
   dexSwap: await swap.getAddress(),
+  multisig: await multisig.getAddress(),
+  multisigOwners: [
+    deployer.address,
+    feeRecipient.address,
+    thirdMultisigOwner.address,
+  ],
+  multisigThreshold: (await multisig.threshold()).toString(),
   lendToken: lendTokenAddress,
   collateralToken: collateralTokenAddress,
   lenderPositionToken: await lenderPositionToken.getAddress(),
