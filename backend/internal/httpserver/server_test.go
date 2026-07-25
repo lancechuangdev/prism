@@ -277,15 +277,9 @@ func TestSetAndGetMultiSign(t *testing.T) {
 
 	body := bytes.NewBufferString(`{
 		"chain_id":"97",
-		"sp_name":"SP",
-		"_spToken":"SP",
-		"jp_name":"JP",
-		"_jpToken":"JP",
-		"sp_address":"0xsp",
-		"jp_address":"0xjp",
-		"spHash":"0xsphash",
-		"jpHash":"0xjphash",
-		"multi_sign_account":["0xowner1","0xowner2"]
+		"contract_address":"0xmultisig",
+		"owners":["0xowner1","0xowner2"],
+		"threshold":2
 	}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/pool/setMultiSign", body)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -312,11 +306,11 @@ func TestSetAndGetMultiSign(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response.Data.SPName != "SP" {
-		t.Fatalf("expected SP config, got %+v", response.Data)
+	if response.Data.ContractAddress != "0xmultisig" {
+		t.Fatalf("unexpected multisig config: %+v", response.Data)
 	}
-	if len(response.Data.MultiSignAccount) != 2 {
-		t.Fatalf("expected two multisig accounts, got %+v", response.Data.MultiSignAccount)
+	if len(response.Data.Owners) != 2 || response.Data.Threshold != 2 {
+		t.Fatalf("unexpected multisig owners or threshold: %+v", response.Data)
 	}
 }
 

@@ -15,16 +15,10 @@ func TestSetAndGet(t *testing.T) {
 	service := NewService(memoryStore)
 
 	err := service.Set(ctx, Config{
-		ChainID:          "97",
-		SPName:           "SP",
-		SPToken:          "SP",
-		JPName:           "JP",
-		JPToken:          "JP",
-		SPAddress:        "0xsp",
-		JPAddress:        "0xjp",
-		SPHash:           "0xsphash",
-		JPHash:           "0xjphash",
-		MultiSignAccount: []string{"0xowner1", "0xowner2"},
+		ChainID:         "97",
+		ContractAddress: "0xmultisig",
+		Owners:          []string{"0xowner1", "0xowner2"},
+		Threshold:       2,
 	})
 	if err != nil {
 		t.Fatalf("set multisig: %v", err)
@@ -34,23 +28,22 @@ func TestSetAndGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get multisig: %v", err)
 	}
-	if cfg.SPName != "SP" {
-		t.Fatalf("expected SP name, got %s", cfg.SPName)
+	if cfg.ContractAddress != "0xmultisig" {
+		t.Fatalf("unexpected contract address: %s", cfg.ContractAddress)
 	}
-	if len(cfg.MultiSignAccount) != 2 {
-		t.Fatalf("expected two multisig accounts, got %d", len(cfg.MultiSignAccount))
-	}
-	if cfg.CreatedAt != now || cfg.UpdatedAt != now {
-		t.Fatalf("unexpected timestamps: %+v", cfg)
+	if len(cfg.Owners) != 2 || cfg.Threshold != 2 {
+		t.Fatalf("unexpected multisig config: %+v", cfg)
 	}
 }
 
-func TestSetRequiresSPName(t *testing.T) {
+func TestSetValidatesRequiredFieldsAndThreshold(t *testing.T) {
 	service := NewService(newFakeStore())
 
 	err := service.Set(context.Background(), Config{
-		ChainID:          "97",
-		MultiSignAccount: []string{"0xowner1"},
+		ChainID:         "97",
+		ContractAddress: "0xmultisig",
+		Owners:          []string{"0xowner1"},
+		Threshold:       2,
 	})
 	if !errors.Is(err, ErrInvalidConfig) {
 		t.Fatalf("expected invalid config, got %v", err)
@@ -79,13 +72,6 @@ func newFakeStore() *fakeStore {
 }
 
 func (s *fakeStore) Save(_ context.Context, cfg Config) error {
-	now := s.now().UTC()
-	if existing, ok := s.records[cfg.ChainID]; ok {
-		cfg.CreatedAt = existing.CreatedAt
-	} else {
-		cfg.CreatedAt = now
-	}
-	cfg.UpdatedAt = now
 	s.records[cfg.ChainID] = cfg
 	return nil
 }

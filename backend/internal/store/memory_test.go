@@ -97,9 +97,10 @@ func TestMemoryStoreSavesMultiSignConfig(t *testing.T) {
 	store.SetClockForTest(func() time.Time { return now })
 
 	err := store.Save(ctx, multisig.Config{
-		ChainID:          "97",
-		SPName:           "SP",
-		MultiSignAccount: []string{"0xowner1"},
+		ChainID:         "97",
+		ContractAddress: "0xmultisig",
+		Owners:          []string{"0xowner1"},
+		Threshold:       1,
 	})
 	if err != nil {
 		t.Fatalf("save multisig: %v", err)
@@ -109,11 +110,8 @@ func TestMemoryStoreSavesMultiSignConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get multisig: %v", err)
 	}
-	if cfg.SPName != "SP" {
-		t.Fatalf("expected SP, got %+v", cfg)
-	}
-	if cfg.CreatedAt != now || cfg.UpdatedAt != now {
-		t.Fatalf("unexpected timestamps: %+v", cfg)
+	if cfg.ContractAddress != "0xmultisig" || len(cfg.Owners) != 1 || cfg.Threshold != 1 {
+		t.Fatalf("unexpected multisig config: %+v", cfg)
 	}
 }
 

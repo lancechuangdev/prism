@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 )
 
 var (
@@ -13,18 +12,10 @@ var (
 )
 
 type Config struct {
-	ChainID          string    `json:"chain_id"`
-	SPName           string    `json:"sp_name"`
-	SPToken          string    `json:"_spToken"`
-	JPName           string    `json:"jp_name"`
-	JPToken          string    `json:"_jpToken"`
-	SPAddress        string    `json:"sp_address"`
-	JPAddress        string    `json:"jp_address"`
-	SPHash           string    `json:"spHash"`
-	JPHash           string    `json:"jpHash"`
-	MultiSignAccount []string  `json:"multi_sign_account"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ChainID         string   `json:"chain_id"`
+	ContractAddress string   `json:"contract_address"`
+	Owners          []string `json:"owners"`
+	Threshold       uint64   `json:"threshold"`
 }
 
 type MultiSigStore interface {
@@ -44,11 +35,14 @@ func (s *Service) Set(ctx context.Context, cfg Config) error {
 	if cfg.ChainID == "" {
 		return fmt.Errorf("%w: chain_id is required", ErrInvalidConfig)
 	}
-	if cfg.SPName == "" {
-		return fmt.Errorf("%w: sp_name is required", ErrInvalidConfig)
+	if cfg.ContractAddress == "" {
+		return fmt.Errorf("%w: contract_address is required", ErrInvalidConfig)
 	}
-	if len(cfg.MultiSignAccount) == 0 {
-		return fmt.Errorf("%w: multi_sign_account is required", ErrInvalidConfig)
+	if len(cfg.Owners) == 0 {
+		return fmt.Errorf("%w: owners are required", ErrInvalidConfig)
+	}
+	if cfg.Threshold == 0 || cfg.Threshold > uint64(len(cfg.Owners)) {
+		return fmt.Errorf("%w: threshold must be between 1 and the number of owners", ErrInvalidConfig)
 	}
 	return s.store.Save(ctx, cfg)
 }

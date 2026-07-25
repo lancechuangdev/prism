@@ -57,16 +57,10 @@ type dataResponse[T any] struct {
 }
 
 type setMultiSignRequest struct {
-	ChainID          string   `json:"chain_id"`
-	SPName           string   `json:"sp_name"`
-	SPToken          string   `json:"_spToken"`
-	JPName           string   `json:"jp_name"`
-	JPToken          string   `json:"_jpToken"`
-	SPAddress        string   `json:"sp_address"`
-	JPAddress        string   `json:"jp_address"`
-	SPHash           string   `json:"spHash"`
-	JPHash           string   `json:"jpHash"`
-	MultiSignAccount []string `json:"multi_sign_account"`
+	ChainID         string   `json:"chain_id"`
+	ContractAddress string   `json:"contract_address"`
+	Owners          []string `json:"owners"`
+	Threshold       uint64   `json:"threshold"`
 }
 
 type getMultiSignRequest struct {
@@ -247,16 +241,10 @@ func New(cfg config.Config, logger *slog.Logger, chainQueryService *chain.QueryS
 		}
 
 		cfg := multisig.Config{
-			ChainID:          req.ChainID,
-			SPName:           req.SPName,
-			SPToken:          req.SPToken,
-			JPName:           req.JPName,
-			JPToken:          req.JPToken,
-			SPAddress:        req.SPAddress,
-			JPAddress:        req.JPAddress,
-			SPHash:           req.SPHash,
-			JPHash:           req.JPHash,
-			MultiSignAccount: req.MultiSignAccount,
+			ChainID:         req.ChainID,
+			ContractAddress: req.ContractAddress,
+			Owners:          req.Owners,
+			Threshold:       req.Threshold,
 		}
 		if err := multisigService.Set(r.Context(), cfg); err != nil {
 			writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})

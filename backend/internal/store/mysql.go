@@ -99,21 +99,15 @@ func (s *MySQLStore) Migrate(ctx context.Context) error {
 			updated_at DATETIME NOT NULL,
 			UNIQUE KEY uniq_token_info_chain_token (chain_id, token)
 		)`,
-		`CREATE TABLE IF NOT EXISTS multi_sign (
+		`CREATE TABLE IF NOT EXISTS multisig_config (
 			id BIGINT AUTO_INCREMENT PRIMARY KEY,
 			chain_id VARCHAR(32) NOT NULL,
-			sp_name VARCHAR(255) NOT NULL DEFAULT '',
-			sp_token VARCHAR(255) NOT NULL DEFAULT '',
-			jp_name VARCHAR(255) NOT NULL DEFAULT '',
-			jp_token VARCHAR(255) NOT NULL DEFAULT '',
-			sp_address VARCHAR(255) NOT NULL DEFAULT '',
-			jp_address VARCHAR(255) NOT NULL DEFAULT '',
-			sp_hash VARCHAR(255) NOT NULL DEFAULT '',
-			jp_hash VARCHAR(255) NOT NULL DEFAULT '',
-			multi_sign_account JSON NOT NULL,
+			contract_address VARCHAR(128) NOT NULL,
+			owners JSON NOT NULL,
+			threshold BIGINT UNSIGNED NOT NULL,
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,
-			UNIQUE KEY uniq_multi_sign_chain (chain_id)
+			UNIQUE KEY uniq_multisig_config_chain (chain_id)
 		)`,
 	}
 
@@ -341,49 +335,38 @@ func scanToken(row rowScanner) (TokenInfo, error) {
 // Multisign
 func (s *MySQLStore) Save(ctx context.Context, cfg multisig.Config) error {
 	now := s.now().UTC()
-	accounts, err := json.Marshal(cfg.MultiSignAccount)
+	owners, err := json.Marshal(cfg.Owners)
 	if err != nil {
 		return err
 	}
 
-	_, err = s.db.ExecContext(ctx, `INSERT INTO multi_sign (
-		chain_id, sp_name, sp_token, jp_name, jp_token, sp_address, jp_address,
-		sp_hash, jp_hash, multi_sign_account, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO multisig_config (
+		chain_id, contract_address, owners, threshold, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?)
 	ON DUPLICATE KEY UPDATE
-		sp_name=VALUES(sp_name),
-		sp_token=VALUES(sp_token),
-		jp_name=VALUES(jp_name),
-		jp_token=VALUES(jp_token),
-		sp_address=VALUES(sp_address),
-		jp_address=VALUES(jp_address),
-		sp_hash=VALUES(sp_hash),
-		jp_hash=VALUES(jp_hash),
-		multi_sign_account=VALUES(multi_sign_account),
+		contract_address=VALUES(contract_address),
+		owners=VALUES(owners),
+		threshold=VALUES(threshold),
 		updated_at=VALUES(updated_at)`,
-		cfg.ChainID, cfg.SPName, cfg.SPToken, cfg.JPName, cfg.JPToken, cfg.SPAddress, cfg.JPAddress,
-		cfg.SPHash, cfg.JPHash, string(accounts), now, now,
+		cfg.ChainID, cfg.ContractAddress, string(owners), cfg.Threshold, now, now,
 	)
 	return err
 }
 
 func (s *MySQLStore) Get(ctx context.Context, chainID string) (multisig.Config, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT chain_id, sp_name, sp_token, jp_name, jp_token, sp_address,
-		jp_address, sp_hash, jp_hash, multi_sign_account, created_at, updated_at
-		FROM multi_sign WHERE chain_id=?`, chainID)
+	row := s.db.QueryRowContext(ctx, `SELECT chain_id, contract_address, owners, threshold
+		FROM multisig_config WHERE chain_id=?`, chainID)
 
 	cfg := multisig.Config{}
-	accountsJSON := ""
-	err := row.Scan(&cfg.ChainID, &cfg.SPName, &cfg.SPToken, &cfg.JPName, &cfg.JPToken,
-		&cfg.SPAddress, &cfg.JPAddress, &cfg.SPHash, &cfg.JPHash, &accountsJSON,
-		&cfg.CreatedAt, &cfg.UpdatedAt)
+	ownersJSON := ""
+	err := row.Scan(&cfg.ChainID, &cfg.ContractAddress, &ownersJSON, &cfg.Threshold)
 	if errors.Is(err, sql.ErrNoRows) {
 		return multisig.Config{}, multisig.ErrNotFound
 	}
 	if err != nil {
 		return multisig.Config{}, err
 	}
-	if err := json.Unmarshal([]byte(accountsJSON), &cfg.MultiSignAccount); err != nil {
+	if err := json.Unmarshal([]byte(ownersJSON), &cfg.Owners); err != nil {
 		return multisig.Config{}, err
 	}
 	return cfg, nil

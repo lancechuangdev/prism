@@ -238,7 +238,7 @@ The MySQL store creates these tables if they do not exist:
 - `poolbases`
 - `pooldata`
 - `token_info`
-- `multi_sign`
+- `multisig_config`
 
 Run API with MySQL:
 
@@ -664,15 +664,9 @@ curl -X POST "http://localhost:8080/api/v1/pool/setMultiSign" \
   -H "Content-Type: application/json" \
   -d '{
     "chain_id":"97",
-    "sp_name":"SP",
-    "_spToken":"SP",
-    "jp_name":"JP",
-    "_jpToken":"JP",
-    "sp_address":"0xsp",
-    "jp_address":"0xjp",
-    "spHash":"0xsphash",
-    "jpHash":"0xjphash",
-    "multi_sign_account":["0xowner1","0xowner2"]
+    "contract_address":"0xmultisig",
+    "owners":["0xowner1","0xowner2"],
+    "threshold":2
   }'
 ```
 

@@ -170,14 +170,7 @@ func (s *MemoryStore) Save(_ context.Context, cfg multisig.Config) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	now := s.now().UTC()
-	if existing, ok := s.multisig[cfg.ChainID]; ok {
-		cfg.CreatedAt = existing.CreatedAt
-	} else if cfg.CreatedAt.IsZero() {
-		cfg.CreatedAt = now
-	}
-	cfg.UpdatedAt = now
-	cfg.MultiSignAccount = slices.Clone(cfg.MultiSignAccount)
+	cfg.Owners = slices.Clone(cfg.Owners)
 
 	s.multisig[cfg.ChainID] = cfg
 	return nil
@@ -191,6 +184,6 @@ func (s *MemoryStore) Get(_ context.Context, chainID string) (multisig.Config, e
 	if !ok {
 		return multisig.Config{}, multisig.ErrNotFound
 	}
-	cfg.MultiSignAccount = slices.Clone(cfg.MultiSignAccount)
+	cfg.Owners = slices.Clone(cfg.Owners)
 	return cfg, nil
 }
