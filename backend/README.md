@@ -7,14 +7,10 @@ It contains two executables:
   Ethereum JSON-RPC and stores a snapshot in the configured repository
   (`memory` or `mysql`). Pool and token requests read that indexed data through
   the chain query service.
-- `cmd/scheduler` periodically reads chain data over Ethereum JSON-RPC, writes
-  it to the configured repository, and refreshes the configured price quote
+- `cmd/scheduler` periodically reads chain data over Ethereum JSON-RPC, writes it to the configured repository, and refreshes the configured price quote
   through a Redis-backed cache.
 
-Both executables require `PRISM_POOL_ADDRESS`; the API also requires
-`PRISM_MULTISIG_ADDRESS`. They use
-`PRISM_CHAIN_RPC_URL=http://127.0.0.1:8545` by default and verify that the RPC
-chain ID matches `PRISM_CHAIN_ID`. `DemoReader` is used only by tests.
+Both executables require `PRISM_POOL_ADDRESS`; the API also requires `PRISM_MULTISIG_ADDRESS`. They use `PRISM_CHAIN_RPC_URL=http://127.0.0.1:8545` by default and verify that the RPC chain ID matches `PRISM_CHAIN_ID`.`DemoReader` is used only by tests.
 
 Selecting MySQL for both executables gives the API and scheduler a shared, persistent repository.
 

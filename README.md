@@ -118,12 +118,9 @@ npm run deploy:local
 The deployment output includes the local RPC URL, chain ID, and deployed
 `PrismPool` address. Addresses change whenever the local node is restarted.
 
-Hardhat also defines simulated L1 and OP networks and an HTTP Sepolia network.
-Sepolia requires `SEPOLIA_RPC_URL` and `SEPOLIA_PRIVATE_KEY`; the current
-deployment script targets only the local persistent node.
+Hardhat also defines simulated L1 and OP networks and an HTTP Sepolia network. Sepolia requires `SEPOLIA_RPC_URL` and `SEPOLIA_PRIVATE_KEY`; the current deployment script targets only the local persistent node.
 
-See [`protocol/README.md`](./protocol/README.md) for the contract-focused
-lifecycle, local deployment, ABI extraction, and Go binding generation notes.
+See [`protocol/README.md`](./protocol/README.md) for the contract-focused lifecycle, local deployment, ABI extraction, and Go binding generation notes.
 
 ## Backend
 

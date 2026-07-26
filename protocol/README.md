@@ -99,7 +99,13 @@ docker compose up --build
 
 `PrismPool` accepts an explicit `initialOwner_` constructor argument. The local deployment supplies the `ThresholdMultiSig` address rather than temporarily assigning ownership to the deployer. Consequently, direct `createPool` calls from individual owner wallets revert; pool creation must be approved and executed through the multisig.
 
-The existing `npm run create-pool:api` helper still implements the earlier single-owner workflow and should not be used with this deployment. It will be updated alongside the backend multisig pool-creation flow in the next step.
+With the local node, deployment, backend API, and scheduler running, create another pool through the backend-prepared multisig flow:
+
+```bash
+npm run create-pool:api
+```
+
+The helper requests a `create_pool` proposal from `POST /api/v1/multisig/proposals`, broadcasts the required number of approvals from the local deployment owners, executes the approved transaction, verifies that `poolCount()` increased, and waits for the scheduler to index the new pool. It is a local-development automation helper; production owner wallets should review, sign, and broadcast the prepared transactions independently.
 
 ## Multisig administration
 

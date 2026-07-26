@@ -6,8 +6,8 @@ import { network } from "hardhat";
 
 type LocalDeployment = {
   chainId: string;
-  deployer: string;
   prismPool: string;
+  multisig: string;
   lendToken: string;
   collateralToken: string;
   lenderPositionToken: string;
@@ -27,6 +27,21 @@ type LoginResponse = {
 
 type DataResponse<T> = {
   data: T;
+};
+
+type Proposal = {
+  transactionHash: string;
+  operation: string;
+  target: string;
+  value: string;
+  data: string;
+  nonce: string;
+};
+
+type PreparedProposal = {
+  proposal: Proposal;
+  approvalTransaction: PreparedTransaction;
+  executionTransaction: PreparedTransaction;
 };
 
 type IndexedPool = {
@@ -52,12 +67,12 @@ const deploymentPath = path.join(protocolRoot, "deployments", "local.json");
 const deployment = await readLocalDeployment();
 
 const { ethers } = await network.create();
-const [owner] = await ethers.getSigners();
+const signers = await ethers.getSigners();
 const chain = await ethers.provider.getNetwork();
-const pool = await ethers.getContractAt(
-  "PrismPool",
-  deployment.prismPool,
-  owner,
+const pool = await ethers.getContractAt("PrismPool", deployment.prismPool);
+const multisig = await ethers.getContractAt(
+  "ThresholdMultiSig",
+  deployment.multisig,
 );
 
 if (chain.chainId.toString() !== deployment.chainId) {
@@ -66,11 +81,31 @@ if (chain.chainId.toString() !== deployment.chainId) {
   );
 }
 if (
-  ethers.getAddress(await pool.owner()) !== ethers.getAddress(owner.address) ||
-  ethers.getAddress(deployment.deployer) !== ethers.getAddress(owner.address)
+  ethers.getAddress(await pool.owner()) !==
+  ethers.getAddress(deployment.multisig)
 ) {
   throw new Error(
-    `local signer ${owner.address} is not the deployed PrismPool owner`,
+    `PrismPool owner ${await pool.owner()} does not match the deployed multisig ${deployment.multisig}`,
+  );
+}
+
+const ownerCount = Number(await multisig.ownerCount());
+const ownerAddresses = new Set<string>();
+for (let index = 0; index < ownerCount; index++) {
+  ownerAddresses.add(
+    ethers.getAddress(await multisig.getOwner(index)).toLowerCase(),
+  );
+}
+const ownerSigners = signers.filter((signer) =>
+  ownerAddresses.has(signer.address.toLowerCase()),
+);
+const threshold = parsePositiveInteger(
+  "on-chain multisig threshold",
+  (await multisig.threshold()).toString(),
+);
+if (ownerSigners.length < threshold) {
+  throw new Error(
+    `only ${ownerSigners.length} local multisig owner signers are available, but ${threshold} approvals are required`,
   );
 }
 
@@ -86,35 +121,55 @@ if (latestBlock === null) {
 
 const poolCountBefore = await pool.poolCount();
 const settleTime = latestBlock.timestamp + 24 * 60 * 60;
-const prepared = await postJSON<DataResponse<PreparedTransaction>>(
-  `${apiUrl}/api/v1/pools`,
+const nonce = Date.now().toString();
+const prepared = await postJSON<DataResponse<PreparedProposal>>(
+  `${apiUrl}/api/v1/multisig/proposals`,
   {
-    settleTime: settleTime.toString(),
-    maturityTime: (settleTime + 7 * 24 * 60 * 60).toString(),
-    interestRate: "1000000",
-    maxLendSupply: ethers.parseEther("100000").toString(),
-    collateralizationRatio: "200000000",
-    lendToken: deployment.lendToken,
-    collateralToken: deployment.collateralToken,
-    lenderPositionToken: deployment.lenderPositionToken,
-    borrowerPositionToken: deployment.borrowerPositionToken,
-    liquidateRate: "20000000",
+    chain_id: deployment.chainId,
+    nonce,
+    operation: {
+      type: "create_pool",
+      params: {
+        settleTime: settleTime.toString(),
+        maturityTime: (settleTime + 7 * 24 * 60 * 60).toString(),
+        interestRate: "1000000",
+        maxLendSupply: ethers.parseEther("100000").toString(),
+        collateralizationRatio: "200000000",
+        lendToken: deployment.lendToken,
+        collateralToken: deployment.collateralToken,
+        lenderPositionToken: deployment.lenderPositionToken,
+        borrowerPositionToken: deployment.borrowerPositionToken,
+        liquidateRate: "20000000",
+      },
+    },
   },
   login.tokenId,
 );
 
-validatePreparedTransaction(prepared.data);
+await validatePreparedProposal(prepared.data, nonce);
 
-const transaction = await owner.sendTransaction({
-  to: prepared.data.to,
-  data: prepared.data.data,
-  value: BigInt(prepared.data.value),
+for (const signer of ownerSigners.slice(0, threshold)) {
+  const approval = await signer.sendTransaction({
+    to: prepared.data.approvalTransaction.to,
+    data: prepared.data.approvalTransaction.data,
+    value: BigInt(prepared.data.approvalTransaction.value),
+  });
+  console.log(`Owner ${signer.address} broadcast approval ${approval.hash}`);
+  const approvalReceipt = await approval.wait();
+  if (approvalReceipt === null || approvalReceipt.status !== 1) {
+    throw new Error(`approval transaction ${approval.hash} failed`);
+  }
+}
+
+const execution = await ownerSigners[0].sendTransaction({
+  to: prepared.data.executionTransaction.to,
+  data: prepared.data.executionTransaction.data,
+  value: BigInt(prepared.data.executionTransaction.value),
 });
-console.log(`Broadcast transaction ${transaction.hash}`);
-
-const receipt = await transaction.wait();
+console.log(`Broadcast execution transaction ${execution.hash}`);
+const receipt = await execution.wait();
 if (receipt === null || receipt.status !== 1) {
-  throw new Error(`createPool transaction ${transaction.hash} failed`);
+  throw new Error(`execution transaction ${execution.hash} failed`);
 }
 
 const poolCountAfter = await pool.poolCount();
@@ -129,22 +184,64 @@ console.log(`Created on-chain pool ${poolId} in block ${receipt.blockNumber}`);
 await waitForIndexedPool(poolId, deployment.chainId);
 console.log(`Backend indexed pool ${poolId}`);
 
-function validatePreparedTransaction(preparedTransaction: PreparedTransaction) {
-  if (preparedTransaction.chainId !== deployment.chainId) {
+async function validatePreparedProposal(
+  preparedProposal: PreparedProposal,
+  expectedNonce: string,
+) {
+  if (preparedProposal.proposal.operation !== "create_pool") {
     throw new Error(
-      `API returned chain ${preparedTransaction.chainId}, expected ${deployment.chainId}`,
+      `API returned operation ${preparedProposal.proposal.operation}, expected create_pool`,
     );
   }
   if (
-    ethers.getAddress(preparedTransaction.to) !==
+    ethers.getAddress(preparedProposal.proposal.target) !==
     ethers.getAddress(deployment.prismPool)
   ) {
     throw new Error(
-      `API returned target ${preparedTransaction.to}, expected ${deployment.prismPool}`,
+      `API returned proposal target ${preparedProposal.proposal.target}, expected ${deployment.prismPool}`,
     );
   }
-  if (BigInt(preparedTransaction.value) !== 0n) {
-    throw new Error("createPool transaction must not transfer native currency");
+  if (preparedProposal.proposal.nonce !== expectedNonce) {
+    throw new Error(
+      `API returned nonce ${preparedProposal.proposal.nonce}, expected ${expectedNonce}`,
+    );
+  }
+  if (BigInt(preparedProposal.proposal.value) !== 0n) {
+    throw new Error("createPool proposal must not transfer native currency");
+  }
+
+  for (const [name, transaction] of [
+    ["approval", preparedProposal.approvalTransaction],
+    ["execution", preparedProposal.executionTransaction],
+  ] as const) {
+    if (transaction.chainId !== deployment.chainId) {
+      throw new Error(
+        `API returned ${name} chain ${transaction.chainId}, expected ${deployment.chainId}`,
+      );
+    }
+    if (
+      ethers.getAddress(transaction.to) !==
+      ethers.getAddress(deployment.multisig)
+    ) {
+      throw new Error(
+        `API returned ${name} target ${transaction.to}, expected ${deployment.multisig}`,
+      );
+    }
+    if (BigInt(transaction.value) !== 0n) {
+      throw new Error(`${name} transaction must not transfer native currency`);
+    }
+  }
+
+  const expectedHash = await multisig.getTransactionHash(
+    preparedProposal.proposal.target,
+    BigInt(preparedProposal.proposal.value),
+    preparedProposal.proposal.data,
+    BigInt(preparedProposal.proposal.nonce),
+  );
+  if (expectedHash !== preparedProposal.proposal.transactionHash) {
+    throw new Error(
+      `API returned proposal hash ${preparedProposal.proposal.transactionHash}, expected ${expectedHash}`,
+    );
   }
 }
 
