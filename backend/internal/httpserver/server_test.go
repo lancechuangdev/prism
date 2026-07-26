@@ -325,7 +325,9 @@ func TestPrepareMultisigConfigChangeProposal(t *testing.T) {
 		"nonce":"7",
 		"operation":{
 			"type":"add_owner",
-			"owner":"0x3000000000000000000000000000000000000003"
+			"params":{
+				"owner":"0x3000000000000000000000000000000000000003"
+			}
 		}
 	}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/multisig/proposals", body)
@@ -353,6 +355,31 @@ func TestPrepareMultisigConfigChangeProposal(t *testing.T) {
 	}
 }
 
+func TestPrepareMultisigProposalRejectsParamsFromAnotherOperation(t *testing.T) {
+	server := newTestServer(t)
+	token := loginForTest(t, server)
+	body := bytes.NewBufferString(`{
+		"chain_id":"97",
+		"nonce":"7",
+		"operation":{
+			"type":"add_owner",
+			"params":{
+				"owner":"0x3000000000000000000000000000000000000003",
+				"settleTime":"2000000000"
+			}
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/multisig/proposals", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+}
+
 func TestPrepareMultisigCreatePoolProposal(t *testing.T) {
 	poolCreator := &testPoolTransactionPreparer{result: chain.PreparedTransaction{
 		To: "0x4000000000000000000000000000000000000004", Data: "0x12345678",
@@ -369,16 +396,18 @@ func TestPrepareMultisigCreatePoolProposal(t *testing.T) {
 		"nonce":"8",
 		"operation":{
 			"type":"create_pool",
-			"settleTime":"2000000000",
-			"maturityTime":"2000600000",
-			"interestRate":"1000000",
-			"maxLendSupply":"1000000000000000000000",
-			"collateralizationRatio":"200000000",
-			"lendToken":"0x1000000000000000000000000000000000000001",
-			"collateralToken":"0x2000000000000000000000000000000000000002",
-			"lenderPositionToken":"0x3000000000000000000000000000000000000003",
-			"borrowerPositionToken":"0x4000000000000000000000000000000000000004",
-			"liquidateRate":"20000000"
+			"params":{
+				"settleTime":"2000000000",
+				"maturityTime":"2000600000",
+				"interestRate":"1000000",
+				"maxLendSupply":"1000000000000000000000",
+				"collateralizationRatio":"200000000",
+				"lendToken":"0x1000000000000000000000000000000000000001",
+				"collateralToken":"0x2000000000000000000000000000000000000002",
+				"lenderPositionToken":"0x3000000000000000000000000000000000000003",
+				"borrowerPositionToken":"0x4000000000000000000000000000000000000004",
+				"liquidateRate":"20000000"
+			}
 		}
 	}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/multisig/proposals", body)

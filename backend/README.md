@@ -163,7 +163,9 @@ curl -X POST http://localhost:8080/api/v1/multisig/proposals \
     "nonce": "1",
     "operation": {
       "type": "add_owner",
-      "owner": "0x3000000000000000000000000000000000000003"
+      "params": {
+        "owner": "0x3000000000000000000000000000000000000003"
+      }
     }
   }'
 ```
@@ -175,6 +177,8 @@ Supported configuration operations and their additional fields are:
 - `replace_owner`: `old_owner` and `new_owner`
 - `change_threshold`: `threshold`
 
+Each operation puts its fields inside `params`. Fields belonging to a different operation are rejected rather than silently ignored.
+
 For multisig-controlled pool creation, use `create_pool` and put the normal pool fields in the same operation object:
 
 ```json
@@ -183,16 +187,18 @@ For multisig-controlled pool creation, use `create_pool` and put the normal pool
   "nonce": "2",
   "operation": {
     "type": "create_pool",
-    "settleTime": "2000000000",
-    "maturityTime": "2000600000",
-    "interestRate": "1000000",
-    "maxLendSupply": "1000000000000000000000",
-    "collateralizationRatio": "200000000",
-    "lendToken": "0x...",
-    "collateralToken": "0x...",
-    "lenderPositionToken": "0x...",
-    "borrowerPositionToken": "0x...",
-    "liquidateRate": "20000000"
+    "params": {
+      "settleTime": "2000000000",
+      "maturityTime": "2000600000",
+      "interestRate": "1000000",
+      "maxLendSupply": "1000000000000000000000",
+      "collateralizationRatio": "200000000",
+      "lendToken": "0x...",
+      "collateralToken": "0x...",
+      "lenderPositionToken": "0x...",
+      "borrowerPositionToken": "0x...",
+      "liquidateRate": "20000000"
+    }
   }
 }
 ```

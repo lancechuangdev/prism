@@ -1,10 +1,12 @@
 package httpserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -64,11 +66,24 @@ type prepareMultisigProposalRequest struct {
 }
 
 type multisigOperationRequest struct {
-	Type                   string `json:"type"`
-	Owner                  string `json:"owner"`
-	OldOwner               string `json:"old_owner"`
-	NewOwner               string `json:"new_owner"`
-	Threshold              uint64 `json:"threshold"`
+	Type   string          `json:"type"`
+	Params json.RawMessage `json:"params"`
+}
+
+type ownerOperationParams struct {
+	Owner string `json:"owner"`
+}
+
+type replaceOwnerParams struct {
+	OldOwner string `json:"old_owner"`
+	NewOwner string `json:"new_owner"`
+}
+
+type changeThresholdParams struct {
+	Threshold uint64 `json:"threshold"`
+}
+
+type createPoolOperationParams struct {
 	SettleTime             string `json:"settleTime"`
 	MaturityTime           string `json:"maturityTime"`
 	InterestRate           string `json:"interestRate"`
@@ -256,28 +271,55 @@ func New(cfg config.Config,
 
 		var result multisig.PreparedProposal
 		switch req.Operation.Type {
-		case multisig.OperationAddOwner, multisig.OperationRemoveOwner,
-			multisig.OperationReplaceOwner, multisig.OperationChangeThreshold:
+		case multisig.OperationAddOwner, multisig.OperationRemoveOwner:
+			params, decodeErr := decodeOperationParams[ownerOperationParams](req.Operation.Params)
+			if decodeErr != nil {
+				err = decodeErr
+				break
+			}
 			result, err = multisigTransactions.PrepareConfigChange(r.Context(), multisig.ConfigChangeParams{
 				ChainID:         multisigConfig.ChainID,
 				MultisigAddress: multisigConfig.ContractAddress,
 				Operation:       req.Operation.Type,
-				Owner:           req.Operation.Owner,
-				OldOwner:        req.Operation.OldOwner,
-				NewOwner:        req.Operation.NewOwner,
-				Threshold:       req.Operation.Threshold,
+				Owner:           params.Owner,
 				Nonce:           req.Nonce,
 			})
+		case multisig.OperationReplaceOwner:
+			params, decodeErr := decodeOperationParams[replaceOwnerParams](req.Operation.Params)
+			if decodeErr != nil {
+				err = decodeErr
+				break
+			}
+			result, err = multisigTransactions.PrepareConfigChange(r.Context(), multisig.ConfigChangeParams{
+				ChainID: multisigConfig.ChainID, MultisigAddress: multisigConfig.ContractAddress,
+				Operation: req.Operation.Type, OldOwner: params.OldOwner,
+				NewOwner: params.NewOwner, Nonce: req.Nonce,
+			})
+		case multisig.OperationChangeThreshold:
+			params, decodeErr := decodeOperationParams[changeThresholdParams](req.Operation.Params)
+			if decodeErr != nil {
+				err = decodeErr
+				break
+			}
+			result, err = multisigTransactions.PrepareConfigChange(r.Context(), multisig.ConfigChangeParams{
+				ChainID: multisigConfig.ChainID, MultisigAddress: multisigConfig.ContractAddress,
+				Operation: req.Operation.Type, Threshold: params.Threshold, Nonce: req.Nonce,
+			})
 		case multisig.OperationCreatePool:
+			params, decodeErr := decodeOperationParams[createPoolOperationParams](req.Operation.Params)
+			if decodeErr != nil {
+				err = decodeErr
+				break
+			}
 			var poolTransaction chain.PreparedTransaction
 			poolTransaction, err = poolTransactions.PrepareCreatePool(r.Context(), chain.CreatePoolParams{
-				SettleTime: req.Operation.SettleTime, MaturityTime: req.Operation.MaturityTime,
-				InterestRate: req.Operation.InterestRate, MaxLendSupply: req.Operation.MaxLendSupply,
-				CollateralizationRatio: req.Operation.CollateralizationRatio,
-				LendToken:              req.Operation.LendToken, CollateralToken: req.Operation.CollateralToken,
-				LenderPositionToken:   req.Operation.LenderPositionToken,
-				BorrowerPositionToken: req.Operation.BorrowerPositionToken,
-				LiquidateRate:         req.Operation.LiquidateRate,
+				SettleTime: params.SettleTime, MaturityTime: params.MaturityTime,
+				InterestRate: params.InterestRate, MaxLendSupply: params.MaxLendSupply,
+				CollateralizationRatio: params.CollateralizationRatio,
+				LendToken:              params.LendToken, CollateralToken: params.CollateralToken,
+				LenderPositionToken:   params.LenderPositionToken,
+				BorrowerPositionToken: params.BorrowerPositionToken,
+				LiquidateRate:         params.LiquidateRate,
 			})
 			if err == nil {
 				result, err = multisigTransactions.PrepareProposal(r.Context(), multisig.ProposalParams{
@@ -318,6 +360,23 @@ func New(cfg config.Config,
 		Addr:    ":" + cfg.Port,
 		Handler: requestLogger(logger, mux),
 	}
+}
+
+func decodeOperationParams[T any](raw json.RawMessage) (T, error) {
+	var params T
+	if len(raw) == 0 {
+		return params, fmt.Errorf("%w: operation params are required", multisig.ErrInvalidProposal)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&params); err != nil {
+		return params, fmt.Errorf("%w: invalid operation params: %v", multisig.ErrInvalidProposal, err)
+	}
+	// Try reading another JSON value. If the result is anything other than end-of-input, reject the request.
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return params, fmt.Errorf("%w: operation params must contain one JSON object", multisig.ErrInvalidProposal)
+	}
+	return params, nil
 }
 
 func requireChainID(w http.ResponseWriter, r *http.Request) (string, bool) {
