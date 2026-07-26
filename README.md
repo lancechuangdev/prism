@@ -99,16 +99,85 @@ suite covers pool creation, deposits, settlement, refunds, claims, repayment,
 liquidation, position tokens, the mock oracle, fixed-rate swaps, and multisig
 administration.
 
-### Deploy the protocol locally
+### Run the local protocol/backend integration for pool creation
+
+Use this sequence whenever the Solidity ABI may have changed. It rebuilds the
+contracts, regenerates the Go bindings used by the backend, starts the local
+chain and backend stack, creates a pool through the backend-prepared multisig
+flow, and queries the indexed pool information.
+
+#### 1. Install the ABI generation tools
+
+Run these commands from the repository root:
+
+```bash
+sudo apt install jq
+go install github.com/ethereum/go-ethereum/cmd/abigen@latest
+abigen --version
+```
+
+#### 2. Compile the contracts and extract the current ABIs
+
+```bash
+cd protocol
+npm install
+npx hardhat build --build-profile production
+cd ..
+
+jq '.abi' \
+  protocol/artifacts/contracts/pool/PrismPool.sol/PrismPool.json \
+  > protocol/contracts/pool/PrismPool.abi.json
+
+jq '.abi' \
+  protocol/artifacts/contracts/admin/ThresholdMultiSig.sol/ThresholdMultiSig.json \
+  > protocol/contracts/admin/ThresholdMultiSig.abi.json
+```
+
+#### 3. Regenerate and verify the Go contract bindings
+
+The `abigen` commands intentionally overwrite generated files. Do not edit these files manually.
+
+```bash
+abigen \
+  --abi protocol/contracts/pool/PrismPool.abi.json \
+  --pkg contracts \
+  --type PrismPool \
+  --out backend/internal/contracts/prism_pool.go
+
+abigen \
+  --abi protocol/contracts/admin/ThresholdMultiSig.abi.json \
+  --pkg contracts \
+  --type ThresholdMultiSig \
+  --out backend/internal/contracts/threshold_multi_sig.go
+
+gofmt -w \
+  backend/internal/contracts/prism_pool.go \
+  backend/internal/contracts/threshold_multi_sig.go
+
+cd backend
+go test ./...
+cd ..
+```
+
+The generic ERC-20 binding in `backend/internal/contracts/erc20_token.go` does not need regeneration unless the ERC-20 ABI used by the backend changes.
+
+#### 4. Start the local chain
 
 Start a persistent Hardhat node. Bind it to all host interfaces when the backend will run in Docker:
 
 ```bash
 cd protocol
+npm run node -- --hostname 0.0.0.0
+# or bypass npm script:
 npx hardhat node --hostname 0.0.0.0
 ```
 
-In a second terminal, deploy the protocol and create one seed pool:
+The first `--` tells npm to pass the remaining arguments to `hardhat node`.
+Keep this terminal running.
+
+#### 5. Deploy the protocol
+
+In a second terminal, deploy the protocol and create seed pool `0`:
 
 ```bash
 cd protocol
@@ -116,7 +185,91 @@ npm run deploy:local
 ```
 
 The deployment output includes the local RPC URL, chain ID, and deployed
-`PrismPool` address. Addresses change whenever the local node is restarted.
+contract addresses. It also writes them to `protocol/deployments/local.json`.
+Addresses change whenever the local node is restarted, so redeploy after every
+restart and use the newly generated addresses.
+
+#### 6. Build and start the backend
+
+In a third terminal, run these commands from the repository root:
+
+```bash
+cd backend
+
+export PRISM_POOL_ADDRESS="$(
+  jq -r '.prismPool' ../protocol/deployments/local.json
+)"
+export PRISM_MULTISIG_ADDRESS="$(
+  jq -r '.multisig' ../protocol/deployments/local.json
+)"
+
+docker compose up --build
+```
+
+The `--build` option compiles the backend with the regenerated Go bindings.
+For a completely uncached image build, use:
+
+```bash
+docker compose build --no-cache api scheduler
+docker compose up
+```
+
+Wait for the API and scheduler to start, then check the API from another
+terminal:
+
+```bash
+curl -s http://localhost:8080/healthz
+```
+
+#### 7. Create a pool through the integration helper
+
+In a fourth terminal:
+
+```bash
+cd protocol
+npm run create-pool:api
+```
+
+The helper logs into the backend, requests a `create_pool` multisig proposal, broadcasts the required two local-owner approvals, executes the proposal, checks that `poolCount()` increased, and waits for the scheduler to index the new pool in MySQL. Because deployment creates pool `0`, this command normally creates pool `1`.
+
+Successful output ends with messages similar to:
+
+```text
+Created on-chain pool 1 in block ...
+Backend indexed pool 1
+```
+
+#### 8. Query the indexed pool information
+
+```bash
+curl -s \
+  "http://localhost:8080/api/v1/poolBaseInfo?chainId=31337" |
+  jq
+
+curl -s \
+  "http://localhost:8080/api/v1/poolDataInfo?chainId=31337" |
+  jq
+
+curl -s \
+  "http://localhost:8080/api/v1/token?chainId=31337" |
+  jq
+```
+
+The scheduler synchronizes every 30 seconds. The integration helper waits up to 90 seconds for its new pool, but a manual query immediately after another on-chain transaction may briefly return the previous snapshot.
+
+#### 9. Stop the backend stack
+
+From the `backend` directory, preserve the MySQL volume with:
+
+```bash
+docker compose down
+```
+
+To remove the local MySQL data as well:
+
+```bash
+docker compose down -v
+```
 
 Hardhat also defines simulated L1 and OP networks and an HTTP Sepolia network. Sepolia requires `SEPOLIA_RPC_URL` and `SEPOLIA_PRIVATE_KEY`; the current deployment script targets only the local persistent node.
 

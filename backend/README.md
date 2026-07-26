@@ -798,3 +798,8 @@ Notes:
 Memory remains the default so tests and quick demos do not need a database.
 When PRISM_STORE=mysql is selected, API and scheduler can share indexed state through MySQL.
 ```
+### TODO: Pool lifecycle proposals
+
+The backend does not yet prepare API transactions for pool settlement, repayment, or liquidation. Although `PrismPool` implements `settle(poolId)`, `repayPool(poolId, maxCollateralAmount)`, and `liquidate(poolId, maxCollateralAmount)`, all three functions are restricted to the pool owner, which is the multisig.
+
+Add `settle_pool`, `repay_pool`, and `liquidate_pool` operation types to `POST /api/v1/multisig/proposals`. Each operation should validate its operation-specific parameters, encode the corresponding `PrismPool` call, and wrap that calldata in the existing prepare–approve–execute multisig workflow.

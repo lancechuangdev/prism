@@ -196,3 +196,13 @@ Before accepting real assets such as USDT, WETH, or WBTC:
 - correct and test the repayment-interest units;
 - replace `MockOracle` and `FixedRateSwap` with production integrations; and
 - add explicit wrapped-asset UX, since native ETH and BTC are not ERC-20 tokens.
+
+## TODO: Position-token redemption warning
+
+`withdrawLend()` and `withdrawBorrow()` are intentionally permissionless. They burn position tokens from `msg.sender` and send the redeemed assets back to that same address, so a caller cannot directly redeem tokens held by another address. Position tokens therefore act as transferable bearer claims.
+
+The current fungible `PositionToken` does not identify the pool that minted it, however, and the withdrawal functions do not independently track a holder's redemption entitlement for each pool. Reusing one lender or borrower position-token contract across multiple pools can therefore allow tokens minted for one pool to be redeemed against another pool. This is unsafe when the pools have different redemption ratios.
+
+Until this is redesigned, every pool must use unique lender and borrower position-token contracts. The local deployment and `create-pool:api` helper currently reuse their generated position-token addresses, so creating multiple pools with those helpers is for development only and must not be treated as production-safe.
+
+TODO: enforce pool-specific positions in the protocol, either by deploying unique tokens per pool, using an ERC-1155 token ID derived from `poolId`, or adding explicit per-pool redemption accounting.
