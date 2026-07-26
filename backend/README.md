@@ -140,7 +140,7 @@ pool address is invalid. The API also verifies that `PrismPool.owner()` equals `
 
 ### Prepare a multisig proposal
 
-The configured contract at `PRISM_MULTISIG_ADDRESS` is the source of truth for owners and threshold. One proposal request encodes both the inner operation and its multisig approval and execution transactions. Pool creation, settlement, and repayment are available as the `create_pool`, `settle_pool`, and `repay_pool` operations; there are no direct pool-owner transaction endpoints because individual wallets do not own `PrismPool`.
+The configured contract at `PRISM_MULTISIG_ADDRESS` is the source of truth for owners and threshold. One proposal request encodes both the inner operation and its multisig approval and execution transactions. Pool creation, settlement, repayment, and liquidation are available as the `create_pool`, `settle_pool`, `repay_pool`, and `liquidate_pool` operations; there are no direct pool-owner transaction endpoints because individual wallets do not own `PrismPool`.
 
 To prepare an owner update:
 
@@ -233,6 +233,24 @@ To prepare repayment for an active pool after maturity, provide the zero-based o
 
 `maxCollateralAmount` must be a positive decimal string within the Solidity `uint256` range and is denominated in the collateral token's smallest unit.
 The backend validates the proposal inputs and calldata encoding. The contract still enforces pool state, maturity, DEX liquidity, and whether the maximum is sufficient when the multisig executes the transaction.
+
+To prepare liquidation of an undercollateralized active pool:
+
+```json
+{
+  "chain_id": "31337",
+  "nonce": "5",
+  "operation": {
+    "type": "liquidate_pool",
+    "params": {
+      "poolId": "1",
+      "maxCollateralAmount": "5000000000000000000"
+    }
+  }
+}
+```
+
+Liquidation uses the same input rules as repayment: `poolId` is a non-negative decimal `uint256`, and `maxCollateralAmount` is a positive decimal `uint256` denominated in the collateral token's smallest unit. The contract enforces that the pool is active and undercollateralized and that the swap can execute within the supplied collateral limit.
 
 The response contains the canonical inner `proposal` plus an unsigned `approvalTransaction` and `executionTransaction`.
 
@@ -830,13 +848,6 @@ Notes:
 Memory remains the default so tests and quick demos do not need a database.
 When PRISM_STORE=mysql is selected, API and scheduler can share indexed state through MySQL.
 ```
-### TODO: Pool lifecycle proposals
+### Pool lifecycle proposals
 
-The backend now prepares pool settlement and repayment proposals through the
-`settle_pool` and `repay_pool` operations. Both owner-only calls are wrapped in
-the existing prepare–approve–execute multisig workflow.
-
-Liquidation proposals remain to be implemented. Add a `liquidate_pool`
-operation type to `POST /api/v1/multisig/proposals`. It should validate its
-operation-specific parameters, encode the corresponding `PrismPool` call, and
-wrap that calldata in the same multisig workflow.
+The backend prepares all owner-controlled pool lifecycle calls through `POST /api/v1/multisig/proposals`: `create_pool`, `settle_pool`, `repay_pool`, and `liquidate_pool`. Each operation validates its parameters, encodes the corresponding `PrismPool` call, and wraps that calldata in the existing prepare–approve–execute multisig workflow.

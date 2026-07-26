@@ -11,6 +11,8 @@
     "settle-pool:api": "hardhat run scripts/settle-pool-via-api.ts --network localhost --build-profile production",
     "setup-repay:local": "hardhat run scripts/setup-repay-pool.ts --network localhost --build-profile production",
     "repay-pool:api": "hardhat run scripts/repay-pool-via-api.ts --network localhost --build-profile production",
+    "setup-liquidate:local": "hardhat run scripts/setup-liquidate-pool.ts --network localhost --build-profile production",
+    "liquidate-pool:api": "hardhat run scripts/liquidate-pool-via-api.ts --network localhost --build-profile production",
     "format": "prettier --write ."
   },
   "keywords": [],

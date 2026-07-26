@@ -38,6 +38,13 @@ type IndexedPool = {
 
 const FUNDING = 0n;
 const ACTIVE = 1n;
+const collateralCrashPrice =
+  process.env.PRISM_SETUP_COLLATERAL_CRASH_PRICE === undefined
+    ? undefined
+    : parsePositiveAmount(
+        "PRISM_SETUP_COLLATERAL_CRASH_PRICE",
+        process.env.PRISM_SETUP_COLLATERAL_CRASH_PRICE,
+      );
 const apiUrl = (process.env.PRISM_API_URL ?? "http://127.0.0.1:8080").replace(
   /\/$/,
   "",
@@ -273,9 +280,31 @@ if ((await pool.getPoolState(poolId)) !== ACTIVE) {
 }
 console.log(`Activated pool ${poolId} in block ${receipt.blockNumber}`);
 await waitForIndexedState(poolId, ACTIVE.toString());
-console.log(
-  `Pool ${poolId} is ready: PRISM_POOL_ID=${poolId} npm run repay-pool:api`,
-);
+if (collateralCrashPrice === undefined) {
+  console.log(
+    `Pool ${poolId} is ready: PRISM_POOL_ID=${poolId} npm run repay-pool:api`,
+  );
+} else {
+  const oracle = await ethers.getContractAt("MockOracle", await pool.oracle());
+  const oracleOwner = await signerForAddress(
+    await oracle.owner(),
+    signers,
+    "MockOracle owner",
+  );
+  await (
+    await oracle
+      .connect(oracleOwner)
+      .setPrice(poolInfo.collateralToken, collateralCrashPrice)
+  ).wait();
+  if (!(await pool.isUndercollateralized(poolId))) {
+    throw new Error(
+      `pool ${poolId} is still sufficiently collateralized at price ${collateralCrashPrice}`,
+    );
+  }
+  console.log(
+    `Crashed collateral price to ${collateralCrashPrice}; pool ${poolId} is ready: PRISM_POOL_ID=${poolId} npm run liquidate-pool:api`,
+  );
+}
 
 async function validateProposal(prepared: PreparedProposal, nonce: string) {
   if (

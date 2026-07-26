@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	ErrInvalidCreatePool = errors.New("invalid create pool request")
-	ErrInvalidSettlePool = errors.New("invalid settle pool request")
-	ErrInvalidRepayPool  = errors.New("invalid repay pool request")
+	ErrInvalidCreatePool    = errors.New("invalid create pool request")
+	ErrInvalidSettlePool    = errors.New("invalid settle pool request")
+	ErrInvalidRepayPool     = errors.New("invalid repay pool request")
+	ErrInvalidLiquidatePool = errors.New("invalid liquidate pool request")
 )
 
 type CreatePoolParams struct {
@@ -36,6 +37,11 @@ type RepayPoolParams struct {
 	MaxCollateralAmount string
 }
 
+type LiquidatePoolParams struct {
+	PoolID              string
+	MaxCollateralAmount string
+}
+
 type PreparedTransaction struct {
 	To      string `json:"to"`
 	Data    string `json:"data"`
@@ -47,6 +53,7 @@ type PoolTransactionPreparer interface {
 	PrepareCreatePool(ctx context.Context, params CreatePoolParams) (PreparedTransaction, error)
 	PrepareSettlePool(ctx context.Context, poolID string) (PreparedTransaction, error)
 	PrepareRepayPool(ctx context.Context, params RepayPoolParams) (PreparedTransaction, error)
+	PrepareLiquidatePool(ctx context.Context, params LiquidatePoolParams) (PreparedTransaction, error)
 }
 
 type PoolTransactionBuilder struct {
@@ -126,6 +133,31 @@ func (b *PoolTransactionBuilder) PrepareRepayPool(_ context.Context, params Repa
 	data, err := contractABI.Pack("repayPool", parsedPoolID, maxCollateralAmount)
 	if err != nil {
 		return PreparedTransaction{}, fmt.Errorf("encode repayPool: %w", err)
+	}
+	return PreparedTransaction{
+		To:      b.poolAddress.Hex(),
+		Data:    hexutil.Encode(data),
+		Value:   "0x0",
+		ChainID: b.chainID,
+	}, nil
+}
+
+func (b *PoolTransactionBuilder) PrepareLiquidatePool(_ context.Context, params LiquidatePoolParams) (PreparedTransaction, error) {
+	parsedPoolID, ok := new(big.Int).SetString(params.PoolID, 10)
+	if !ok || parsedPoolID.Sign() < 0 || parsedPoolID.BitLen() > 256 {
+		return PreparedTransaction{}, fmt.Errorf("%w: poolId must be a non-negative uint256 decimal integer", ErrInvalidLiquidatePool)
+	}
+	maxCollateralAmount, ok := new(big.Int).SetString(params.MaxCollateralAmount, 10)
+	if !ok || maxCollateralAmount.Sign() <= 0 || maxCollateralAmount.BitLen() > 256 {
+		return PreparedTransaction{}, fmt.Errorf("%w: maxCollateralAmount must be a positive uint256 decimal integer", ErrInvalidLiquidatePool)
+	}
+	contractABI, err := contracts.PrismPoolMetaData.GetAbi()
+	if err != nil {
+		return PreparedTransaction{}, fmt.Errorf("load PrismPool ABI: %w", err)
+	}
+	data, err := contractABI.Pack("liquidate", parsedPoolID, maxCollateralAmount)
+	if err != nil {
+		return PreparedTransaction{}, fmt.Errorf("encode liquidate: %w", err)
 	}
 	return PreparedTransaction{
 		To:      b.poolAddress.Hex(),

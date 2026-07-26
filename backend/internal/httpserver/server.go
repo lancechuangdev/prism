@@ -105,6 +105,11 @@ type repayPoolOperationParams struct {
 	MaxCollateralAmount string `json:"maxCollateralAmount"`
 }
 
+type liquidatePoolOperationParams struct {
+	PoolID              string `json:"poolId"`
+	MaxCollateralAmount string `json:"maxCollateralAmount"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
@@ -372,6 +377,24 @@ func New(cfg config.Config,
 					Data: poolTransaction.Data, Nonce: req.Nonce,
 				})
 			}
+		case multisig.OperationLiquidatePool:
+			params, decodeErr := decodeOperationParams[liquidatePoolOperationParams](req.Operation.Params)
+			if decodeErr != nil {
+				err = decodeErr
+				break
+			}
+			var poolTransaction chain.PreparedTransaction
+			poolTransaction, err = poolTransactions.PrepareLiquidatePool(r.Context(), chain.LiquidatePoolParams{
+				PoolID: params.PoolID, MaxCollateralAmount: params.MaxCollateralAmount,
+			})
+			if err == nil {
+				result, err = multisigTransactions.PrepareProposal(r.Context(), multisig.ProposalParams{
+					ChainID: multisigConfig.ChainID, MultisigAddress: multisigConfig.ContractAddress,
+					Operation: multisig.OperationLiquidatePool,
+					Target:    poolTransaction.To, Value: poolTransaction.Value,
+					Data: poolTransaction.Data, Nonce: req.Nonce,
+				})
+			}
 		default:
 			err = fmt.Errorf("%w: unsupported operation %q", multisig.ErrInvalidProposal, req.Operation.Type)
 		}
@@ -379,7 +402,8 @@ func New(cfg config.Config,
 			if errors.Is(err, multisig.ErrInvalidProposal) ||
 				errors.Is(err, chain.ErrInvalidCreatePool) ||
 				errors.Is(err, chain.ErrInvalidSettlePool) ||
-				errors.Is(err, chain.ErrInvalidRepayPool) {
+				errors.Is(err, chain.ErrInvalidRepayPool) ||
+				errors.Is(err, chain.ErrInvalidLiquidatePool) {
 				writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
 				return
 			}

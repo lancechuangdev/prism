@@ -356,7 +356,26 @@ maturity, obtains and validates the backend-prepared `repay_pool` proposal,
 executes the multisig flow, verifies state `REPAID`, and waits for the backend
 to index it.
 
-#### 10. Query the indexed pool information
+#### 10. Liquidate an undercollateralized pool
+
+Create a new funding pool, prepare it for liquidation, then execute the
+API-prepared multisig proposal:
+
+```bash
+cd protocol
+npm run create-pool:api
+npm run setup-liquidate:local
+PRISM_POOL_ID=1 npm run liquidate-pool:api
+```
+
+The setup helper funds and activates the latest pool, configures and funds the
+swap, lowers the mock collateral price, and verifies that the pool is
+undercollateralized. Override the default crash price with
+`PRISM_SETUP_COLLATERAL_CRASH_PRICE`. The liquidation helper defaults its
+maximum to all settled collateral; override it with
+`PRISM_MAX_COLLATERAL_AMOUNT`.
+
+#### 11. Query the indexed pool information
 
 ```bash
 curl -s \
@@ -374,7 +393,7 @@ curl -s \
 
 The scheduler synchronizes every 30 seconds. The integration helper waits up to 90 seconds for its new pool, but a manual query immediately after another on-chain transaction may briefly return the previous snapshot.
 
-#### 11. Stop the backend stack
+#### 12. Stop the backend stack
 
 From the `backend` directory, preserve the MySQL volume with:
 

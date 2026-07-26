@@ -171,6 +171,31 @@ timestamp to maturity, requests and validates a `repay_pool` proposal,
 broadcasts its approvals and execution, verifies the `REPAID` state, and waits
 for the backend to index that state.
 
+Prepare and liquidate a fresh local pool with:
+
+```bash
+npm run create-pool:api
+npm run setup-liquidate:local
+PRISM_POOL_ID=1 npm run liquidate-pool:api
+```
+
+`setup-liquidate:local` performs the same minting, deposits, swap configuration,
+liquidity funding, and API-driven settlement as `setup-repay:local`. It then
+lowers the mock collateral price, verifies that the active pool is
+undercollateralized, and leaves it ready for liquidation. It targets the latest
+funding pool by default. Select a pool or override the crash price with:
+
+```bash
+PRISM_POOL_ID=1 \
+PRISM_SETUP_COLLATERAL_CRASH_PRICE=1000000000000000000000 \
+npm run setup-liquidate:local
+```
+
+The liquidation helper defaults `maxCollateralAmount` to all settled
+collateral. Override it with `PRISM_MAX_COLLATERAL_AMOUNT`. It validates the
+API-prepared `liquidate_pool` calldata, broadcasts the multisig flow, verifies
+state `LIQUIDATED`, and waits for the backend to index it.
+
 ## Multisig administration
 
 `ThresholdMultiSig` supports `addOwner`,`removeOwner`, `replaceOwner`, and `changeThreshold`. These functions use `onlySelf`, so no owner can call them directly. Owners must approve identical transaction parameters targeting the multisig itself, after which an owner executes the approved transaction.

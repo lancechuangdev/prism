@@ -20,11 +20,12 @@ import (
 )
 
 type testPoolTransactionPreparer struct {
-	result       chain.PreparedTransaction
-	err          error
-	params       chain.CreatePoolParams
-	settlePoolID string
-	repayParams  chain.RepayPoolParams
+	result          chain.PreparedTransaction
+	err             error
+	params          chain.CreatePoolParams
+	settlePoolID    string
+	repayParams     chain.RepayPoolParams
+	liquidateParams chain.LiquidatePoolParams
 }
 
 type testMultisigTransactionPreparer struct {
@@ -77,6 +78,11 @@ func (c *testPoolTransactionPreparer) PrepareSettlePool(_ context.Context, poolI
 
 func (c *testPoolTransactionPreparer) PrepareRepayPool(_ context.Context, params chain.RepayPoolParams) (chain.PreparedTransaction, error) {
 	c.repayParams = params
+	return c.result, c.err
+}
+
+func (c *testPoolTransactionPreparer) PrepareLiquidatePool(_ context.Context, params chain.LiquidatePoolParams) (chain.PreparedTransaction, error) {
+	c.liquidateParams = params
 	return c.result, c.err
 }
 
@@ -520,6 +526,49 @@ func TestPrepareMultisigRepayPoolProposal(t *testing.T) {
 		preparer.proposalParams.Target != "0x4000000000000000000000000000000000000004" ||
 		preparer.proposalParams.Data != "0x12345678" ||
 		preparer.proposalParams.Nonce != "10" {
+		t.Fatalf("unexpected proposal params: %+v", preparer.proposalParams)
+	}
+}
+
+func TestPrepareMultisigLiquidatePoolProposal(t *testing.T) {
+	poolTransactions := &testPoolTransactionPreparer{result: chain.PreparedTransaction{
+		To: "0x4000000000000000000000000000000000000004", Data: "0x12345678",
+		Value: "0x0", ChainID: "31337",
+	}}
+	preparer := &testMultisigTransactionPreparer{result: multisig.PreparedProposal{
+		Proposal: multisig.Proposal{Operation: multisig.OperationLiquidatePool},
+	}}
+	server := newTestServerWithPreparers(t, poolTransactions, preparer)
+	token := loginForTest(t, server)
+
+	body := bytes.NewBufferString(`{
+		"chain_id":"31337",
+		"nonce":"11",
+		"operation":{
+			"type":"liquidate_pool",
+			"params":{
+				"poolId":"1",
+				"maxCollateralAmount":"5000000000000000000"
+			}
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/multisig/proposals", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if poolTransactions.liquidateParams.PoolID != "1" ||
+		poolTransactions.liquidateParams.MaxCollateralAmount != "5000000000000000000" {
+		t.Fatalf("unexpected liquidation params: %+v", poolTransactions.liquidateParams)
+	}
+	if preparer.proposalParams.Operation != multisig.OperationLiquidatePool ||
+		preparer.proposalParams.MultisigAddress != "0x1000000000000000000000000000000000000001" ||
+		preparer.proposalParams.Target != "0x4000000000000000000000000000000000000004" ||
+		preparer.proposalParams.Data != "0x12345678" ||
+		preparer.proposalParams.Nonce != "11" {
 		t.Fatalf("unexpected proposal params: %+v", preparer.proposalParams)
 	}
 }

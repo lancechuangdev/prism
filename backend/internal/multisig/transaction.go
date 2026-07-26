@@ -23,6 +23,7 @@ const (
 	OperationCreatePool      = "create_pool"
 	OperationSettlePool      = "settle_pool"
 	OperationRepayPool       = "repay_pool"
+	OperationLiquidatePool   = "liquidate_pool"
 )
 
 type ConfigChangeParams struct {
