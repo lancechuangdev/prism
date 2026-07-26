@@ -49,6 +49,7 @@ describe("PrismPool depositLend", function () {
     await lendToken.mint(bob.address, ethers.parseEther("1000"));
 
     pool = await ethers.deployContract("PrismPool", [
+      owner.address,
       await oracle.getAddress(),
       await swap.getAddress(),
       feeRecipient.address,

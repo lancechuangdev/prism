@@ -55,6 +55,7 @@ describe("PrismPool liquidation", function () {
     await collateralToken.mint(bob.address, ethers.parseEther("10"));
 
     pool = await ethers.deployContract("PrismPool", [
+      owner.address,
       await oracle.getAddress(),
       await swap.getAddress(),
       feeRecipient.address,

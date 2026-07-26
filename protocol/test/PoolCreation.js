@@ -38,6 +38,7 @@ describe("Create pool", function () {
 
     const prismPool = await ethers.getContractFactory("PrismPool");
     pool = await prismPool.deploy(
+      owner.address,
       await oracle.getAddress(),
       await swap.getAddress(),
       feeRecipient.address,
@@ -71,6 +72,49 @@ describe("Create pool", function () {
     expect(await pool.feeAddress()).to.equal(feeRecipient.address);
     expect(await pool.globalPaused()).to.equal(false);
     expect(await pool.poolCount()).to.equal(0n);
+  });
+
+  it("rejects a zero initial owner", async function () {
+    const prismPool = await ethers.getContractFactory("PrismPool");
+
+    await expect(
+      prismPool.deploy(
+        ethers.ZeroAddress,
+        await oracle.getAddress(),
+        await swap.getAddress(),
+        feeRecipient.address,
+      ),
+    ).to.be.revertedWith("Invalid owner address");
+  });
+
+  it("lets a multisig owner create a pool through approval and execution", async function () {
+    const multisig = await ethers.deployContract("ThresholdMultiSig", [
+      [owner.address, alice.address],
+      2,
+    ]);
+    const multisigAddress = await multisig.getAddress();
+    const multisigOwnedPool = await ethers.deployContract("PrismPool", [
+      multisigAddress,
+      await oracle.getAddress(),
+      await swap.getAddress(),
+      feeRecipient.address,
+    ]);
+    const params = await buildCreateParams();
+
+    expect(await multisigOwnedPool.owner()).to.equal(multisigAddress);
+    await expect(multisigOwnedPool.createPool(params)).to.be.revertedWith(
+      "Not the owner",
+    );
+
+    const poolAddress = await multisigOwnedPool.getAddress();
+    const data = multisigOwnedPool.interface.encodeFunctionData("createPool", [
+      params,
+    ]);
+    await multisig.connect(owner).approveTransaction(poolAddress, 0, data, 1);
+    await multisig.connect(alice).approveTransaction(poolAddress, 0, data, 1);
+    await multisig.connect(owner).executeTransaction(poolAddress, 0, data, 1);
+
+    expect(await multisigOwnedPool.poolCount()).to.equal(1n);
   });
 
   it("creates a pool in FUNDING state", async function () {

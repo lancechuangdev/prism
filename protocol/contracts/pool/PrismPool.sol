@@ -207,12 +207,13 @@ contract PrismPool {
         _;
     }
 
-    constructor(address oracle_, address dexSwap_, address payable feeAddress_) {
+    constructor(address initialOwner_, address oracle_, address dexSwap_, address payable feeAddress_) {
+        require(initialOwner_ != address(0), "Invalid owner address");
         require(oracle_ != address(0), "Invalid oracle address");
         require(dexSwap_ != address(0), "Invalid dexSwap address");
         require(feeAddress_ != address(0), "Invalid feeAddress");
 
-        owner = msg.sender;
+        owner = initialOwner_;
         oracle = oracle_;
         dexSwap = dexSwap_;
         feeAddress = feeAddress_;

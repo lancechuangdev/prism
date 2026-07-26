@@ -31,6 +31,7 @@ const borrowerPositionToken = await ethers.deployContract("PositionToken", [
 ]);
 
 const pool = await ethers.deployContract("PrismPool", [
+  await multisig.getAddress(),
   await oracle.getAddress(),
   await swap.getAddress(),
   feeRecipient.address,
@@ -66,19 +67,42 @@ if (latestBlock === null) {
 }
 
 const settleTime = latestBlock.timestamp + 24 * 60 * 60;
+const createPoolParams = {
+  settleTime,
+  maturityTime: settleTime + 7 * 24 * 60 * 60,
+  interestRate: 1_000_000,
+  maxLendSupply: ethers.parseEther("100000"),
+  collateralizationRatio: 200_000_000,
+  lendToken: lendTokenAddress,
+  collateralToken: collateralTokenAddress,
+  lenderPositionToken: await lenderPositionToken.getAddress(),
+  borrowerPositionToken: await borrowerPositionToken.getAddress(),
+  liquidateRate: 20_000_000,
+};
+const createPoolData = pool.interface.encodeFunctionData("createPool", [
+  createPoolParams,
+]);
+const seedPoolNonce = 0;
 await (
-  await pool.createPool({
-    settleTime,
-    maturityTime: settleTime + 7 * 24 * 60 * 60,
-    interestRate: 1_000_000,
-    maxLendSupply: ethers.parseEther("100000"),
-    collateralizationRatio: 200_000_000,
-    lendToken: lendTokenAddress,
-    collateralToken: collateralTokenAddress,
-    lenderPositionToken: await lenderPositionToken.getAddress(),
-    borrowerPositionToken: await borrowerPositionToken.getAddress(),
-    liquidateRate: 20_000_000,
-  })
+  await multisig.approveTransaction(
+    poolAddress,
+    0,
+    createPoolData,
+    seedPoolNonce,
+  )
+).wait();
+await (
+  await multisig
+    .connect(feeRecipient)
+    .approveTransaction(poolAddress, 0, createPoolData, seedPoolNonce)
+).wait();
+await (
+  await multisig.executeTransaction(
+    poolAddress,
+    0,
+    createPoolData,
+    seedPoolNonce,
+  )
 ).wait();
 
 const chain = await ethers.provider.getNetwork();
@@ -87,6 +111,7 @@ const deployment = {
   chainId: chain.chainId.toString(),
   deployer: deployer.address,
   prismPool: poolAddress,
+  prismPoolOwner: await pool.owner(),
   oracle: await oracle.getAddress(),
   dexSwap: await swap.getAddress(),
   multisig: await multisig.getAddress(),

@@ -62,6 +62,7 @@ describe("PrismPool settle", function () {
 
   async function deployPool(poolOracle) {
     return ethers.deployContract("PrismPool", [
+      owner.address,
       await poolOracle.getAddress(),
       await swap.getAddress(),
       feeRecipient.address,
