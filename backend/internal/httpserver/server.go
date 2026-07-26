@@ -81,30 +81,17 @@ type multisigOperationRequest struct {
 	LiquidateRate          string `json:"liquidateRate"`
 }
 
-type createPoolRequest struct {
-	SettleTime             string `json:"settleTime"`
-	MaturityTime           string `json:"maturityTime"`
-	InterestRate           string `json:"interestRate"`
-	MaxLendSupply          string `json:"maxLendSupply"`
-	CollateralizationRatio string `json:"collateralizationRatio"`
-	LendToken              string `json:"lendToken"`
-	CollateralToken        string `json:"collateralToken"`
-	LenderPositionToken    string `json:"lenderPositionToken"`
-	BorrowerPositionToken  string `json:"borrowerPositionToken"`
-	LiquidateRate          string `json:"liquidateRate"`
-}
-
 type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func New(cfg config.Config, 
-	logger *slog.Logger, 
-	chainQueryService *chain.QueryService, 
-	poolTransactions chain.PoolTransactionPreparer, 
-	multisigTransactions multisig.ProposalPreparer, 
-	multisigReader multisig.ChainReader, 
-	authService *auth.Service, 
+func New(cfg config.Config,
+	logger *slog.Logger,
+	chainQueryService *chain.QueryService,
+	poolTransactions chain.PoolTransactionPreparer,
+	multisigTransactions multisig.ProposalPreparer,
+	multisigReader multisig.ChainReader,
+	authService *auth.Service,
 	priceService *price.Service) *http.Server {
 	mux := http.NewServeMux()
 	apiPrefix := "/api/v" + strings.TrimPrefix(cfg.APIVersion, "v")
@@ -222,37 +209,6 @@ func New(cfg config.Config,
 
 		writeJSON(w, http.StatusOK, priceResponse{Data: quote})
 	})
-
-	mux.Handle("POST "+apiPrefix+"/pools", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		req := createPoolRequest{}
-		decoder := json.NewDecoder(r.Body)
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid create pool body"})
-			return
-		}
-
-		result, err := poolTransactions.PrepareCreatePool(r.Context(), chain.CreatePoolParams{
-			SettleTime: req.SettleTime, MaturityTime: req.MaturityTime,
-			InterestRate: req.InterestRate, MaxLendSupply: req.MaxLendSupply,
-			CollateralizationRatio: req.CollateralizationRatio,
-			LendToken:              req.LendToken, CollateralToken: req.CollateralToken,
-			LenderPositionToken:   req.LenderPositionToken,
-			BorrowerPositionToken: req.BorrowerPositionToken,
-			LiquidateRate:         req.LiquidateRate,
-		})
-		if err != nil {
-			if errors.Is(err, chain.ErrInvalidCreatePool) {
-				writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
-				return
-			}
-			logger.Error("prepare create pool transaction failed", slog.Any("error", err))
-			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "prepare create pool transaction failed"})
-			return
-		}
-
-		writeJSON(w, http.StatusOK, dataResponse[chain.PreparedTransaction]{Data: result})
-	})))
 
 	mux.HandleFunc("GET "+apiPrefix+"/multisig", func(w http.ResponseWriter, r *http.Request) {
 		result, err := multisigReader.Config(r.Context())

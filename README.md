@@ -197,7 +197,6 @@ docker compose down -v
 | `POST` | `/api/v1/user/login` | Public |
 | `POST` | `/api/v1/user/logout` | Bearer token |
 | `GET` | `/api/v1/admin/session` | Bearer token |
-| `POST` | `/api/v1/pools` | Bearer token; prepares unsigned `createPool` calldata |
 | `GET` | `/api/v1/multisig` | Public; reads owners and threshold on-chain |
 | `POST` | `/api/v1/multisig/proposals` | Bearer token; prepares approval and execution transactions |
 | `GET` | `/api/v1/multisig/proposals/{txHash}` | Public; reads on-chain approval status |

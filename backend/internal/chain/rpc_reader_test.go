@@ -20,6 +20,7 @@ const (
 	testBorrowAddress = "0x3000000000000000000000000000000000000003"
 	testSPAddress     = "0x4000000000000000000000000000000000000004"
 	testJPAddress     = "0x5000000000000000000000000000000000000005"
+	testOwnerAddress  = "0x6000000000000000000000000000000000000006"
 )
 
 type testEthAPI struct {
@@ -44,6 +45,8 @@ func (a *testEthAPI) Call(_ context.Context, args testCallArgs, _ string) (hexut
 	data := []byte(*args.Input)
 	if method, err := a.poolABI.MethodById(data[:4]); err == nil {
 		switch method.Name {
+		case "owner":
+			return method.Outputs.Pack(common.HexToAddress(testOwnerAddress))
 		case "poolCount":
 			return method.Outputs.Pack(big.NewInt(1))
 		case "getPool":
@@ -131,6 +134,10 @@ func TestRPCReaderReadsContractSnapshots(t *testing.T) {
 	}
 	if token.Symbol != "pUSD" || token.Decimals != 18 {
 		t.Fatalf("unexpected token: %+v", token)
+	}
+	owner, err := reader.PoolOwner(ctx, "31337")
+	if err != nil || owner != common.HexToAddress(testOwnerAddress).Hex() {
+		t.Fatalf("unexpected pool owner %q, err = %v", owner, err)
 	}
 }
 

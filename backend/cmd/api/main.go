@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -61,6 +62,19 @@ func main() {
 	}
 	if multisigConfig.ChainID != cfg.ChainID {
 		logger.Error("multisig chain ID mismatch", slog.String("rpcChainID", multisigConfig.ChainID), slog.String("configuredChainID", cfg.ChainID))
+		os.Exit(1)
+	}
+	poolOwner, err := reader.PoolOwner(context.Background(), cfg.ChainID)
+	if err != nil {
+		logger.Error("read PrismPool owner failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	if !strings.EqualFold(poolOwner, multisigConfig.ContractAddress) {
+		logger.Error(
+			"PrismPool owner is not the configured multisig",
+			slog.String("poolOwner", poolOwner),
+			slog.String("multisigAddress", multisigConfig.ContractAddress),
+		)
 		os.Exit(1)
 	}
 

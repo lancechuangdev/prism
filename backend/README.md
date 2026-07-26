@@ -102,7 +102,6 @@ Protected admin APIs:
 
 ```text
 GET  /api/v1/admin/session
-POST /api/v1/pools
 POST /api/v1/multisig/proposals
 ```
 
@@ -147,35 +146,11 @@ PRISM_MULTISIG_ADDRESS=0x...
 ```
 
 The API and scheduler fail at startup when the RPC connection, chain ID, or
-pool address is invalid.
-
-### Create a pool
-
-Log in and pass the returned token as `Authorization: Bearer <tokenId>`. Then submit positive base-10 integer strings for every Solidity `uint256`:
-
-```bash
-curl -X POST http://localhost:8080/api/v1/pools \
-  -H "Authorization: Bearer $TOKEN_ID" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "settleTime": "2000000000",
-    "maturityTime": "2000600000",
-    "interestRate": "1000000",
-    "maxLendSupply": "1000000000000000000000",
-    "collateralizationRatio": "200000000",
-    "lendToken": "0x...",
-    "collateralToken": "0x...",
-    "lenderPositionToken": "0x...",
-    "borrowerPositionToken": "0x...",
-    "liquidateRate": "20000000"
-  }'
-```
-
-The API returns an unsigned transaction containing `to`, `data`, `value`, and `chainId`. A user wallet must sign and broadcast it. The contract still requires the signing wallet to be the current `PrismPool` owner. The backend does not receive or store a private key.
+pool address is invalid. The API also verifies that `PrismPool.owner()` equals `PRISM_MULTISIG_ADDRESS`.
 
 ### Prepare a multisig proposal
 
-The configured contract at `PRISM_MULTISIG_ADDRESS` is the source of truth for owners and threshold. One proposal request encodes both the inner operation and its multisig approval and execution transactions.
+The configured contract at `PRISM_MULTISIG_ADDRESS` is the source of truth for owners and threshold. One proposal request encodes both the inner operation and its multisig approval and execution transactions. Pool creation is available as the `create_pool` operation; there is no direct pool-creation transaction endpoint because individual wallets do not own `PrismPool`.
 
 To prepare an owner update:
 

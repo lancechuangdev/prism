@@ -172,60 +172,6 @@ func TestPrice(t *testing.T) {
 	}
 }
 
-func TestCreatePool(t *testing.T) {
-	creator := &testPoolTransactionPreparer{result: chain.PreparedTransaction{
-		To:      "0x1000000000000000000000000000000000000001",
-		Data:    "0x1234",
-		Value:   "0x0",
-		ChainID: "31337",
-	}}
-	server := newTestServerWithPoolCreator(t, creator)
-	token := loginForTest(t, server)
-	body := bytes.NewBufferString(`{
-		"settleTime":"2000000000",
-		"maturityTime":"2000600000",
-		"interestRate":"1000000",
-		"maxLendSupply":"1000000000000000000000",
-		"collateralizationRatio":"200000000",
-		"lendToken":"0x1000000000000000000000000000000000000001",
-		"collateralToken":"0x2000000000000000000000000000000000000002",
-		"lenderPositionToken":"0x3000000000000000000000000000000000000003",
-		"borrowerPositionToken":"0x4000000000000000000000000000000000000004",
-		"liquidateRate":"20000000"
-	}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/pools", body)
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec := httptest.NewRecorder()
-
-	server.Handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
-	}
-	if creator.params.MaxLendSupply != "1000000000000000000000" {
-		t.Fatalf("unexpected create params: %+v", creator.params)
-	}
-	var response dataResponse[chain.PreparedTransaction]
-	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if response.Data.ChainID != "31337" || response.Data.Data != "0x1234" {
-		t.Fatalf("unexpected response: %+v", response.Data)
-	}
-}
-
-func TestCreatePoolRequiresAuth(t *testing.T) {
-	server := newTestServer(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/pools", bytes.NewBufferString(`{}`))
-	rec := httptest.NewRecorder()
-
-	server.Handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
-	}
-}
-
 func TestLoginAndProtectedSession(t *testing.T) {
 	server := newTestServer(t)
 

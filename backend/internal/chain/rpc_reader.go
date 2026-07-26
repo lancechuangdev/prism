@@ -65,6 +65,17 @@ func (r *RPCReader) Close() {
 	r.client.Close()
 }
 
+func (r *RPCReader) PoolOwner(ctx context.Context, chainID string) (string, error) {
+	if err := r.validateChainID(chainID); err != nil {
+		return "", err
+	}
+	owner, err := r.pool.Owner(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return "", fmt.Errorf("call owner: %w", err)
+	}
+	return owner.Hex(), nil
+}
+
 func (r *RPCReader) PoolLength(ctx context.Context, chainID string) (int64, error) {
 	if err := r.validateChainID(chainID); err != nil {
 		return 0, err
