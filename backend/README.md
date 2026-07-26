@@ -81,9 +81,9 @@ GET  /healthz
 Public read APIs:
 
 ```text
-GET  /api/v1/poolBaseInfo?chainId=97
-GET  /api/v1/poolDataInfo?chainId=97
-GET  /api/v1/token?chainId=97
+GET  /api/v1/poolBaseInfo?chainId=31337
+GET  /api/v1/poolDataInfo?chainId=31337
+GET  /api/v1/token?chainId=31337
 GET  /api/v1/price?symbol=PRM
 ```
 
@@ -146,7 +146,7 @@ pool address is invalid. The API also verifies that `PrismPool.owner()` equals `
 
 ### Prepare a multisig proposal
 
-The configured contract at `PRISM_MULTISIG_ADDRESS` is the source of truth for owners and threshold. One proposal request encodes both the inner operation and its multisig approval and execution transactions. Pool creation is available as the `create_pool` operation; there is no direct pool-creation transaction endpoint because individual wallets do not own `PrismPool`.
+The configured contract at `PRISM_MULTISIG_ADDRESS` is the source of truth for owners and threshold. One proposal request encodes both the inner operation and its multisig approval and execution transactions. Pool creation and settlement are available as the `create_pool` and `settle_pool` operations; there are no direct pool-owner transaction endpoints because individual wallets do not own `PrismPool`.
 
 To prepare an owner update:
 
@@ -200,6 +200,26 @@ For multisig-controlled pool creation, use `create_pool` and put the normal pool
 ```
 
 `nonce` is a non-negative decimal string chosen by the caller. Clients should use a unique nonce for each proposal.
+
+To prepare settlement for an existing pool, use its zero-based on-chain pool ID:
+
+```json
+{
+  "chain_id": "31337",
+  "nonce": "3",
+  "operation": {
+    "type": "settle_pool",
+    "params": {
+      "poolId": "0"
+    }
+  }
+}
+```
+
+`poolId` must be a non-negative decimal string within the Solidity `uint256`
+range. Settlement still succeeds only when the contract's normal settlement
+conditions are met; preparing a proposal does not preflight the eventual
+on-chain execution.
 
 The response contains the canonical inner `proposal` plus an unsigned `approvalTransaction` and `executionTransaction`.
 
@@ -316,7 +336,7 @@ cd backend
 PRISM_STORE=mysql \
 PRISM_MYSQL_DSN="prism:prism@tcp(127.0.0.1:3306)/prism_backend?parseTime=true&charset=utf8mb4&loc=Local" \
 PRISM_ENV=local \
-PRISM_CHAIN_ID=97 \
+PRISM_CHAIN_ID=31337 \
 PRISM_API_VERSION=1 \
 PRISM_API_PORT=8080 \
 go run ./cmd/api
@@ -329,7 +349,7 @@ cd backend
 PRISM_STORE=mysql \
 PRISM_MYSQL_DSN="prism:prism@tcp(127.0.0.1:3306)/backend?parseTime=true&charset=utf8mb4&loc=Local" \
 PRISM_ENV=local \
-PRISM_CHAIN_ID=97 \
+PRISM_CHAIN_ID=31337 \
 PRISM_SYNC_INTERVAL=30s \
 go run ./cmd/scheduler
 ```
@@ -369,7 +389,7 @@ Quick checks:
 
 ```bash
 curl http://localhost:8080/healthz
-curl http://localhost:8080/api/v1/poolBaseInfo?chainId=97
+curl http://localhost:8080/api/v1/poolBaseInfo?chainId=31337
 curl http://localhost:8080/api/v1/price?symbol=PRM
 ```
 
@@ -482,9 +502,9 @@ PRISM_ENV=local PRISM_API_VERSION=1 PRISM_API_PORT=8080 go run ./cmd/api
 Then query:
 
 ```bash
-curl "http://localhost:8080/api/v1/poolBaseInfo?chainId=97"
-curl "http://localhost:8080/api/v1/poolDataInfo?chainId=97"
-curl "http://localhost:8080/api/v1/token?chainId=97"
+curl "http://localhost:8080/api/v1/poolBaseInfo?chainId=31337"
+curl "http://localhost:8080/api/v1/poolDataInfo?chainId=31337"
+curl "http://localhost:8080/api/v1/token?chainId=31337"
 ```
 
 Run Go Tests:
@@ -516,15 +536,15 @@ Run:
 
 ```bash
 cd backend
-PRISM_ENV=local PRISM_CHAIN_ID=97 PRISM_API_VERSION=1 PRISM_API_PORT=8080 go run ./cmd/api
+PRISM_ENV=local PRISM_CHAIN_ID=31337 PRISM_API_VERSION=1 PRISM_API_PORT=8080 go run ./cmd/api
 ```
 
 Then query:
 
 ```bash
-curl "http://localhost:8080/api/v1/poolBaseInfo?chainId=97"
-curl "http://localhost:8080/api/v1/poolDataInfo?chainId=97"
-curl "http://localhost:8080/api/v1/token?chainId=97"
+curl "http://localhost:8080/api/v1/poolBaseInfo?chainId=31337"
+curl "http://localhost:8080/api/v1/poolDataInfo?chainId=31337"
+curl "http://localhost:8080/api/v1/token?chainId=31337"
 ```
 
 Run Go Tests:
@@ -558,7 +578,7 @@ Run:
 
 ```bash
 cd backend
-PRISM_ENV=local PRISM_CHAIN_ID=97 PRISM_SYNC_INTERVAL=30s go run ./cmd/scheduler
+PRISM_ENV=local PRISM_CHAIN_ID=31337 PRISM_SYNC_INTERVAL=30s go run ./cmd/scheduler
 ```
 
 Run Go Tests:
@@ -596,7 +616,7 @@ Run:
 ```bash
 cd backend
 PRISM_ENV=local \
-PRISM_CHAIN_ID=97 \
+PRISM_CHAIN_ID=31337 \
 PRISM_API_VERSION=1 \
 PRISM_API_PORT=8080 \
 PRISM_ADMIN_USERNAME=admin \
@@ -659,7 +679,7 @@ Run API:
 ```bash
 cd backend
 PRISM_ENV=local \
-PRISM_CHAIN_ID=97 \
+PRISM_CHAIN_ID=31337 \
 PRISM_API_VERSION=1 \
 PRISM_API_PORT=8080 \
 PRISM_PRICE_SYMBOL=PRM \
@@ -677,7 +697,7 @@ Run scheduler:
 ```bash
 cd backend
 PRISM_ENV=local \
-PRISM_CHAIN_ID=97 \
+PRISM_CHAIN_ID=31337 \
 PRISM_SYNC_INTERVAL=30s \
 PRISM_PRICE_SYMBOL=PRM \
 go run ./cmd/scheduler
@@ -710,7 +730,7 @@ Run API:
 ```bash
 cd backend
 PRISM_ENV=local \
-PRISM_CHAIN_ID=97 \
+PRISM_CHAIN_ID=31337 \
 PRISM_API_VERSION=1 \
 PRISM_API_PORT=8080 \
 PRISM_ADMIN_USERNAME=admin \
@@ -777,7 +797,7 @@ Run API with MySQL:
 cd backend
 PRISM_STORE=mysql \
 PRISM_MYSQL_DSN="prism:prism@tcp(127.0.0.1:3306)/backend?parseTime=true&charset=utf8mb4&loc=Local" \
-PRISM_CHAIN_ID=97 \
+PRISM_CHAIN_ID=31337 \
 PRISM_API_VERSION=1 \
 PRISM_API_PORT=8080 \
 go run ./cmd/api
@@ -789,7 +809,7 @@ Run scheduler with MySQL:
 cd backend
 PRISM_STORE=mysql \
 PRISM_MYSQL_DSN="prism:prism@tcp(127.0.0.1:3306)/backend?parseTime=true&charset=utf8mb4&loc=Local" \
-PRISM_CHAIN_ID=97 \
+PRISM_CHAIN_ID=31337 \
 PRISM_SYNC_INTERVAL=30s \
 go run ./cmd/scheduler
 ```
@@ -800,6 +820,13 @@ When PRISM_STORE=mysql is selected, API and scheduler can share indexed state th
 ```
 ### TODO: Pool lifecycle proposals
 
-The backend does not yet prepare API transactions for pool settlement, repayment, or liquidation. Although `PrismPool` implements `settle(poolId)`, `repayPool(poolId, maxCollateralAmount)`, and `liquidate(poolId, maxCollateralAmount)`, all three functions are restricted to the pool owner, which is the multisig.
+The backend now prepares pool settlement proposals through the `settle_pool`
+operation. `PrismPool.settle(poolId)` remains restricted to the pool owner, so
+the prepared call is wrapped in the existing prepare–approve–execute multisig
+workflow.
 
-Add `settle_pool`, `repay_pool`, and `liquidate_pool` operation types to `POST /api/v1/multisig/proposals`. Each operation should validate its operation-specific parameters, encode the corresponding `PrismPool` call, and wrap that calldata in the existing prepare–approve–execute multisig workflow.
+Repayment and liquidation proposals remain to be implemented. Add `repay_pool`
+and `liquidate_pool` operation types to `POST /api/v1/multisig/proposals`.
+Each operation should validate its operation-specific parameters, encode the
+corresponding `PrismPool` call, and wrap that calldata in the same multisig
+workflow.

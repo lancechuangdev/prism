@@ -107,6 +107,23 @@ npm run create-pool:api
 
 The helper requests a `create_pool` proposal from `POST /api/v1/multisig/proposals`, broadcasts the required number of approvals from the local deployment owners, executes the approved transaction, verifies that `poolCount()` increased, and waits for the scheduler to index the new pool. It is a local-development automation helper; production owner wallets should review, sign, and broadcast the prepared transactions independently.
 
+Settle a funding pool through the same backend-prepared multisig flow:
+
+```bash
+# Defaults to the seed pool, pool 0.
+npm run settle-pool:api
+
+# Or select another zero-based on-chain pool ID.
+PRISM_POOL_ID=1 npm run settle-pool:api
+```
+
+The settlement helper checks that the pool exists and is in `FUNDING`, advances
+the local Hardhat timestamp to its settlement time when necessary, requests a
+`settle_pool` proposal, validates its calldata, broadcasts the required
+approvals, and executes it. It then verifies that the pool became `ACTIVE` or
+`CANCELLED` and waits for the backend to index that state. The seed pool has no
+deposits, so settling pool `0` normally moves it to `CANCELLED`.
+
 ## Multisig administration
 
 `ThresholdMultiSig` supports `addOwner`,`removeOwner`, `replaceOwner`, and `changeThreshold`. These functions use `onlySelf`, so no owner can call them directly. Owners must approve identical transaction parameters targeting the multisig itself, after which an owner executes the approved transaction.

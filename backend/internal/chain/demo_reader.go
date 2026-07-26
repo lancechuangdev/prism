@@ -31,7 +31,7 @@ func NewDemoReader() *DemoReader {
 
 	return &DemoReader{
 		pools: map[string][]ContractPoolBase{
-			"97": {
+			"31337": {
 				{
 					SettleTime:               "1767225600",
 					MaturityTime:             "1767830400",
@@ -50,7 +50,7 @@ func NewDemoReader() *DemoReader {
 			},
 		},
 		data: map[string][]ContractPoolData{
-			"97": {
+			"31337": {
 				{
 					SettleAmountLend:        "0",
 					SettleAmountBorrow:      "0",
@@ -62,7 +62,7 @@ func NewDemoReader() *DemoReader {
 			},
 		},
 		tokens: map[string]map[string]ContractToken{
-			"97": {
+			"31337": {
 				busd.Address: busd,
 				btc.Address:  btc,
 			},

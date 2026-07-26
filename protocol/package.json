@@ -8,6 +8,7 @@
     "node": "hardhat node",
     "deploy:local": "hardhat run scripts/deploy-local.ts --network localhost --build-profile production",
     "create-pool:api": "hardhat run scripts/create-pool-via-api.ts --network localhost --build-profile production",
+    "settle-pool:api": "hardhat run scripts/settle-pool-via-api.ts --network localhost --build-profile production",
     "format": "prettier --write ."
   },
   "keywords": [],

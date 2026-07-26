@@ -17,13 +17,13 @@ func TestPoolSyncerRunOnce(t *testing.T) {
 	reader := chain.NewDemoReader()
 	prices := price.NewService(price.NewDemoProvider())
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	syncer := NewPoolSyncer(reader, repo, "97", prices, "PRM", logger)
+	syncer := NewPoolSyncer(reader, repo, "31337", prices, "PRM", logger)
 
 	if err := syncer.RunOnce(ctx); err != nil {
 		t.Fatalf("run once: %v", err)
 	}
 
-	pools, err := repo.ListPoolBases(ctx, "97")
+	pools, err := repo.ListPoolBases(ctx, "31337")
 	if err != nil {
 		t.Fatalf("list pool bases: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestPoolSyncerRunOnce(t *testing.T) {
 		t.Fatalf("expected one synced pool, got %d", len(pools))
 	}
 
-	tokens, err := repo.ListTokens(ctx, "97")
+	tokens, err := repo.ListTokens(ctx, "31337")
 	if err != nil {
 		t.Fatalf("list tokens: %v", err)
 	}

@@ -99,7 +99,66 @@ suite covers pool creation, deposits, settlement, refunds, claims, repayment,
 liquidation, position tokens, the mock oracle, fixed-rate swaps, and multisig
 administration.
 
-### Run the local protocol/backend integration for pool creation
+## Backend
+
+The backend is a Go module with two executables:
+
+- `cmd/api` performs an initial pool sync, serves public and protected HTTP endpoints, and shuts down gracefully on `SIGINT` or `SIGTERM`.
+- `cmd/scheduler` performs an initial sync and repeats it according to `PRISM_SYNC_INTERVAL`.
+
+Both processes can use an in-memory repository or MySQL. They use Redis for price caching and currently fetch cache misses from the demo price provider.
+When both processes use MySQL, the scheduler's indexed snapshots are visible to the API.
+
+The backend also contains:
+
+- `internal/chain/rpc_reader.go`, which implements `chain.Reader` through Ethereum JSON-RPC;
+- generated `PrismPool` and ERC-20 bindings in `internal/contracts`; and
+- an in-process RPC test that verifies ABI encoding and decoding without a running Hardhat node.
+
+### Run the complete backend stack
+
+Docker Compose is the shortest path because it supplies MySQL and Redis:
+
+```bash
+cd backend
+PRISM_POOL_ADDRESS=0x... \
+PRISM_MULTISIG_ADDRESS=0x... \
+docker compose up --build
+```
+
+Start the local Hardhat node with `--hostname 0.0.0.0` and run `npm run deploy:local` first. Use its `prismPool` and `multisig` addresses.
+
+The containers resolve `host.docker.internal` to the host-side Docker gateway, commonly `172.17.0.1` on Linux. Hardhat must listen on that interface; its default `127.0.0.1` binding accepts host-loopback connections only. Binding to `0.0.0.0` is intended for local development and may expose the development node to the local network, depending on the host firewall.
+
+This starts four containers:
+
+| Service | Purpose | Host port |
+| --- | --- | --- |
+| `api` | HTTP API | `8080` |
+| `scheduler` | Periodic pool and price synchronization | none |
+| `mysql` | Persistent indexed state | `3306` |
+| `redis` | Price cache | `6379` |
+
+Check the running API:
+
+```bash
+curl http://localhost:8080/healthz
+curl "http://localhost:8080/api/v1/poolBaseInfo?chainId=31337"
+curl "http://localhost:8080/api/v1/price?symbol=PRM"
+```
+
+Stop the stack while preserving MySQL data:
+
+```bash
+docker compose down
+```
+
+To remove the MySQL volume as well:
+
+```bash
+docker compose down -v
+```
+### Run the local protocol/backend integration for entire pool lifecycle
 
 Use this sequence whenever the Solidity ABI may have changed. It rebuilds the
 contracts, regenerates the Go bindings used by the backend, starts the local
@@ -239,7 +298,28 @@ Created on-chain pool 1 in block ...
 Backend indexed pool 1
 ```
 
-#### 8. Query the indexed pool information
+#### 8. Settle a pool through the integration helper
+
+The local deployment's seed pool has no deposits, so settle pool `0` to verify
+the settlement proposal flow and its transition from `FUNDING` to `CANCELLED`:
+
+```bash
+cd protocol
+npm run settle-pool:api
+```
+
+To settle another zero-based on-chain pool ID:
+
+```bash
+PRISM_POOL_ID=1 npm run settle-pool:api
+```
+
+The helper advances the local Hardhat timestamp to the selected pool's
+settlement time when necessary, obtains and validates the backend-prepared
+`settle_pool` proposal, broadcasts the multisig approvals and execution, then
+waits for the backend to index the resulting `ACTIVE` or `CANCELLED` state.
+
+#### 9. Query the indexed pool information
 
 ```bash
 curl -s \
@@ -257,7 +337,7 @@ curl -s \
 
 The scheduler synchronizes every 30 seconds. The integration helper waits up to 90 seconds for its new pool, but a manual query immediately after another on-chain transaction may briefly return the previous snapshot.
 
-#### 9. Stop the backend stack
+#### 10. Stop the backend stack
 
 From the `backend` directory, preserve the MySQL volume with:
 
@@ -275,74 +355,14 @@ Hardhat also defines simulated L1 and OP networks and an HTTP Sepolia network. S
 
 See [`protocol/README.md`](./protocol/README.md) for the contract-focused lifecycle, local deployment, ABI extraction, and Go binding generation notes.
 
-## Backend
-
-The backend is a Go module with two executables:
-
-- `cmd/api` performs an initial pool sync, serves public and protected HTTP endpoints, and shuts down gracefully on `SIGINT` or `SIGTERM`.
-- `cmd/scheduler` performs an initial sync and repeats it according to `PRISM_SYNC_INTERVAL`.
-
-Both processes can use an in-memory repository or MySQL. They use Redis for price caching and currently fetch cache misses from the demo price provider.
-When both processes use MySQL, the scheduler's indexed snapshots are visible to the API.
-
-The backend also contains:
-
-- `internal/chain/rpc_reader.go`, which implements `chain.Reader` through Ethereum JSON-RPC;
-- generated `PrismPool` and ERC-20 bindings in `internal/contracts`; and
-- an in-process RPC test that verifies ABI encoding and decoding without a running Hardhat node.
-
-### Run the complete backend stack
-
-Docker Compose is the shortest path because it supplies MySQL and Redis:
-
-```bash
-cd backend
-PRISM_POOL_ADDRESS=0x... \
-PRISM_MULTISIG_ADDRESS=0x... \
-docker compose up --build
-```
-
-Start the local Hardhat node with `--hostname 0.0.0.0` and run `npm run deploy:local` first. Use its `prismPool` and `multisig` addresses.
-
-The containers resolve `host.docker.internal` to the host-side Docker gateway, commonly `172.17.0.1` on Linux. Hardhat must listen on that interface; its default `127.0.0.1` binding accepts host-loopback connections only. Binding to `0.0.0.0` is intended for local development and may expose the development node to the local network, depending on the host firewall.
-
-This starts four containers:
-
-| Service | Purpose | Host port |
-| --- | --- | --- |
-| `api` | HTTP API | `8080` |
-| `scheduler` | Periodic pool and price synchronization | none |
-| `mysql` | Persistent indexed state | `3306` |
-| `redis` | Price cache | `6379` |
-
-Check the running API:
-
-```bash
-curl http://localhost:8080/healthz
-curl "http://localhost:8080/api/v1/poolBaseInfo?chainId=31337"
-curl "http://localhost:8080/api/v1/price?symbol=PRM"
-```
-
-Stop the stack while preserving MySQL data:
-
-```bash
-docker compose down
-```
-
-To remove the MySQL volume as well:
-
-```bash
-docker compose down -v
-```
-
 ### API summary
 
 | Method | Path | Access |
 | --- | --- | --- |
 | `GET` | `/healthz` | Public |
-| `GET` | `/api/v1/poolBaseInfo?chainId=97` | Public |
-| `GET` | `/api/v1/poolDataInfo?chainId=97` | Public |
-| `GET` | `/api/v1/token?chainId=97` | Public |
+| `GET` | `/api/v1/poolBaseInfo?chainId=31337` | Public |
+| `GET` | `/api/v1/poolDataInfo?chainId=31337` | Public |
+| `GET` | `/api/v1/token?chainId=31337` | Public |
 | `GET` | `/api/v1/price?symbol=PRM` | Public |
 | `POST` | `/api/v1/user/login` | Public |
 | `POST` | `/api/v1/user/logout` | Bearer token |

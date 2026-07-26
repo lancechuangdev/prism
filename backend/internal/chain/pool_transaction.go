@@ -12,7 +12,10 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/contracts"
 )
 
-var ErrInvalidCreatePool = errors.New("invalid create pool request")
+var (
+	ErrInvalidCreatePool = errors.New("invalid create pool request")
+	ErrInvalidSettlePool = errors.New("invalid settle pool request")
+)
 
 type CreatePoolParams struct {
 	SettleTime             string
@@ -36,6 +39,7 @@ type PreparedTransaction struct {
 
 type PoolTransactionPreparer interface {
 	PrepareCreatePool(ctx context.Context, params CreatePoolParams) (PreparedTransaction, error)
+	PrepareSettlePool(ctx context.Context, poolID string) (PreparedTransaction, error)
 }
 
 type PoolTransactionBuilder struct {
@@ -69,6 +73,27 @@ func (b *PoolTransactionBuilder) PrepareCreatePool(_ context.Context, params Cre
 	data, err := contractABI.Pack("createPool", contractParams)
 	if err != nil {
 		return PreparedTransaction{}, fmt.Errorf("encode createPool: %w", err)
+	}
+	return PreparedTransaction{
+		To:      b.poolAddress.Hex(),
+		Data:    hexutil.Encode(data),
+		Value:   "0x0",
+		ChainID: b.chainID,
+	}, nil
+}
+
+func (b *PoolTransactionBuilder) PrepareSettlePool(_ context.Context, poolID string) (PreparedTransaction, error) {
+	parsedPoolID, ok := new(big.Int).SetString(poolID, 10)
+	if !ok || parsedPoolID.Sign() < 0 || parsedPoolID.BitLen() > 256 {
+		return PreparedTransaction{}, fmt.Errorf("%w: poolId must be a non-negative uint256 decimal integer", ErrInvalidSettlePool)
+	}
+	contractABI, err := contracts.PrismPoolMetaData.GetAbi()
+	if err != nil {
+		return PreparedTransaction{}, fmt.Errorf("load PrismPool ABI: %w", err)
+	}
+	data, err := contractABI.Pack("settle", parsedPoolID)
+	if err != nil {
+		return PreparedTransaction{}, fmt.Errorf("encode settle: %w", err)
 	}
 	return PreparedTransaction{
 		To:      b.poolAddress.Hex(),

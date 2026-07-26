@@ -20,9 +20,10 @@ import (
 )
 
 type testPoolTransactionPreparer struct {
-	result chain.PreparedTransaction
-	err    error
-	params chain.CreatePoolParams
+	result       chain.PreparedTransaction
+	err          error
+	params       chain.CreatePoolParams
+	settlePoolID string
 }
 
 type testMultisigTransactionPreparer struct {
@@ -68,6 +69,11 @@ func (c *testPoolTransactionPreparer) PrepareCreatePool(_ context.Context, param
 	return c.result, c.err
 }
 
+func (c *testPoolTransactionPreparer) PrepareSettlePool(_ context.Context, poolID string) (chain.PreparedTransaction, error) {
+	c.settlePoolID = poolID
+	return c.result, c.err
+}
+
 func TestHealthz(t *testing.T) {
 	server := newTestServer(t)
 
@@ -93,7 +99,7 @@ func TestHealthz(t *testing.T) {
 func TestPoolBaseInfo(t *testing.T) {
 	server := newTestServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/poolBaseInfo?chainId=97", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/poolBaseInfo?chainId=31337", nil)
 	rec := httptest.NewRecorder()
 
 	server.Handler.ServeHTTP(rec, req)
@@ -131,7 +137,7 @@ func TestPoolDataInfoRequiresChainID(t *testing.T) {
 func TestTokenList(t *testing.T) {
 	server := newTestServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/token?chainId=97", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/token?chainId=31337", nil)
 	rec := httptest.NewRecorder()
 
 	server.Handler.ServeHTTP(rec, req)
@@ -310,10 +316,10 @@ func TestPrepareMultisigConfigChangeProposal(t *testing.T) {
 				Nonce:     "7",
 			},
 			ApprovalTransaction: multisig.PreparedTransaction{
-				To: "0x1000000000000000000000000000000000000001", Data: "0x5678", Value: "0x0", ChainID: "97",
+				To: "0x1000000000000000000000000000000000000001", Data: "0x5678", Value: "0x0", ChainID: "31337",
 			},
 			ExecutionTransaction: multisig.PreparedTransaction{
-				To: "0x1000000000000000000000000000000000000001", Data: "0x9abc", Value: "0x0", ChainID: "97",
+				To: "0x1000000000000000000000000000000000000001", Data: "0x9abc", Value: "0x0", ChainID: "31337",
 			},
 		},
 	}
@@ -321,7 +327,7 @@ func TestPrepareMultisigConfigChangeProposal(t *testing.T) {
 	token := loginForTest(t, server)
 
 	body := bytes.NewBufferString(`{
-		"chain_id":"97",
+		"chain_id":"31337",
 		"nonce":"7",
 		"operation":{
 			"type":"add_owner",
@@ -338,7 +344,7 @@ func TestPrepareMultisigConfigChangeProposal(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
-	if preparer.configParams.ChainID != "97" ||
+	if preparer.configParams.ChainID != "31337" ||
 		preparer.configParams.MultisigAddress != "0x1000000000000000000000000000000000000001" ||
 		preparer.configParams.Operation != multisig.OperationAddOwner ||
 		preparer.configParams.Owner != "0x3000000000000000000000000000000000000003" ||
@@ -359,7 +365,7 @@ func TestPrepareMultisigProposalRejectsParamsFromAnotherOperation(t *testing.T) 
 	server := newTestServer(t)
 	token := loginForTest(t, server)
 	body := bytes.NewBufferString(`{
-		"chain_id":"97",
+		"chain_id":"31337",
 		"nonce":"7",
 		"operation":{
 			"type":"add_owner",
@@ -383,7 +389,7 @@ func TestPrepareMultisigProposalRejectsParamsFromAnotherOperation(t *testing.T) 
 func TestPrepareMultisigCreatePoolProposal(t *testing.T) {
 	poolCreator := &testPoolTransactionPreparer{result: chain.PreparedTransaction{
 		To: "0x4000000000000000000000000000000000000004", Data: "0x12345678",
-		Value: "0x0", ChainID: "97",
+		Value: "0x0", ChainID: "31337",
 	}}
 	preparer := &testMultisigTransactionPreparer{result: multisig.PreparedProposal{
 		Proposal: multisig.Proposal{Operation: multisig.OperationCreatePool},
@@ -392,7 +398,7 @@ func TestPrepareMultisigCreatePoolProposal(t *testing.T) {
 	token := loginForTest(t, server)
 
 	body := bytes.NewBufferString(`{
-		"chain_id":"97",
+		"chain_id":"31337",
 		"nonce":"8",
 		"operation":{
 			"type":"create_pool",
@@ -430,6 +436,45 @@ func TestPrepareMultisigCreatePoolProposal(t *testing.T) {
 	}
 }
 
+func TestPrepareMultisigSettlePoolProposal(t *testing.T) {
+	poolTransactions := &testPoolTransactionPreparer{result: chain.PreparedTransaction{
+		To: "0x4000000000000000000000000000000000000004", Data: "0x12345678",
+		Value: "0x0", ChainID: "31337",
+	}}
+	preparer := &testMultisigTransactionPreparer{result: multisig.PreparedProposal{
+		Proposal: multisig.Proposal{Operation: multisig.OperationSettlePool},
+	}}
+	server := newTestServerWithPreparers(t, poolTransactions, preparer)
+	token := loginForTest(t, server)
+
+	body := bytes.NewBufferString(`{
+		"chain_id":"31337",
+		"nonce":"9",
+		"operation":{
+			"type":"settle_pool",
+			"params":{"poolId":"0"}
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/multisig/proposals", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if poolTransactions.settlePoolID != "0" {
+		t.Fatalf("unexpected pool ID: %q", poolTransactions.settlePoolID)
+	}
+	if preparer.proposalParams.Operation != multisig.OperationSettlePool ||
+		preparer.proposalParams.MultisigAddress != "0x1000000000000000000000000000000000000001" ||
+		preparer.proposalParams.Target != "0x4000000000000000000000000000000000000004" ||
+		preparer.proposalParams.Data != "0x12345678" ||
+		preparer.proposalParams.Nonce != "9" {
+		t.Fatalf("unexpected proposal params: %+v", preparer.proposalParams)
+	}
+}
+
 func TestPrepareMultisigProposalRequiresAuth(t *testing.T) {
 	server := newTestServer(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/multisig/proposals", bytes.NewBufferString(`{}`))
@@ -458,7 +503,7 @@ func newTestServerWithDependencies(t *testing.T, poolCreator chain.PoolTransacti
 	t.Helper()
 
 	repo := store.NewMemoryStore()
-	if err := chain.SyncPools(context.Background(), chain.NewDemoReader(), repo, "97"); err != nil {
+	if err := chain.SyncPools(context.Background(), chain.NewDemoReader(), repo, "31337"); err != nil {
 		t.Fatalf("sync demo contract data: %v", err)
 	}
 
@@ -482,7 +527,7 @@ func newTestServerWithDependencies(t *testing.T, poolCreator chain.PoolTransacti
 
 func defaultTestMultisigReader() *testMultisigReader {
 	return &testMultisigReader{config: multisig.Config{
-		ChainID: "97", ContractAddress: "0x1000000000000000000000000000000000000001",
+		ChainID: "31337", ContractAddress: "0x1000000000000000000000000000000000000001",
 		Owners: []string{
 			"0x2000000000000000000000000000000000000002",
 			"0x3000000000000000000000000000000000000003",

@@ -10,13 +10,13 @@ import (
 func TestQueryServiceListsPoolsAndTokens(t *testing.T) {
 	ctx := context.Background()
 	repo := store.NewMemoryStore()
-	if err := SyncPools(ctx, NewDemoReader(), repo, "97"); err != nil {
+	if err := SyncPools(ctx, NewDemoReader(), repo, "31337"); err != nil {
 		t.Fatalf("sync pools: %v", err)
 	}
 
 	service := NewQueryService(repo)
 
-	poolBases, err := service.ListPoolBases(ctx, "97")
+	poolBases, err := service.ListPoolBases(ctx, "31337")
 	if err != nil {
 		t.Fatalf("list pool bases: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestQueryServiceListsPoolsAndTokens(t *testing.T) {
 		t.Fatalf("expected one pool base, got %d", len(poolBases))
 	}
 
-	poolData, err := service.ListPoolData(ctx, "97")
+	poolData, err := service.ListPoolData(ctx, "31337")
 	if err != nil {
 		t.Fatalf("list pool data: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestQueryServiceListsPoolsAndTokens(t *testing.T) {
 		t.Fatalf("expected one pool data record, got %d", len(poolData))
 	}
 
-	tokens, err := service.ListTokens(ctx, "97")
+	tokens, err := service.ListTokens(ctx, "31337")
 	if err != nil {
 		t.Fatalf("list tokens: %v", err)
 	}

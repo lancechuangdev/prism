@@ -11,11 +11,11 @@ func TestSyncPoolsCopiesContractSnapshotsIntoStore(t *testing.T) {
 	ctx := context.Background()
 	repo := store.NewMemoryStore()
 
-	if err := SyncPools(ctx, NewDemoReader(), repo, "97"); err != nil {
+	if err := SyncPools(ctx, NewDemoReader(), repo, "31337"); err != nil {
 		t.Fatalf("sync pools: %v", err)
 	}
 
-	pools, err := repo.ListPoolBases(ctx, "97")
+	pools, err := repo.ListPoolBases(ctx, "31337")
 	if err != nil {
 		t.Fatalf("list pool bases: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestSyncPoolsCopiesContractSnapshotsIntoStore(t *testing.T) {
 		t.Fatalf("unexpected token snapshots: %+v %+v", pool.LendToken, pool.CollateralToken)
 	}
 
-	data, err := repo.GetPoolData(ctx, store.PoolKey{ChainID: "97", PoolID: 1})
+	data, err := repo.GetPoolData(ctx, store.PoolKey{ChainID: "31337", PoolID: 1})
 	if err != nil {
 		t.Fatalf("get pool data: %v", err)
 	}
@@ -44,11 +44,11 @@ func TestSyncPoolsStoresTokenMetadata(t *testing.T) {
 	ctx := context.Background()
 	repo := store.NewMemoryStore()
 
-	if err := SyncPools(ctx, NewDemoReader(), repo, "97"); err != nil {
+	if err := SyncPools(ctx, NewDemoReader(), repo, "31337"); err != nil {
 		t.Fatalf("sync pools: %v", err)
 	}
 
-	tokens, err := repo.ListTokens(ctx, "97")
+	tokens, err := repo.ListTokens(ctx, "31337")
 	if err != nil {
 		t.Fatalf("list tokens: %v", err)
 	}

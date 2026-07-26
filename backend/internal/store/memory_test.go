@@ -13,7 +13,7 @@ func TestMemoryStoreUpsertsAndListsPoolBases(t *testing.T) {
 	store.now = fixedClock(time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC))
 
 	err := store.UpsertPoolBase(ctx, PoolBase{
-		Key:                      PoolKey{ChainID: "97", PoolID: 2},
+		Key:                      PoolKey{ChainID: "31337", PoolID: 2},
 		TotalLendDeposited:       "200",
 		TotalCollateralDeposited: "20",
 		State:                    PoolStateActive,
@@ -23,7 +23,7 @@ func TestMemoryStoreUpsertsAndListsPoolBases(t *testing.T) {
 	}
 
 	err = store.UpsertPoolBase(ctx, PoolBase{
-		Key:                      PoolKey{ChainID: "97", PoolID: 1},
+		Key:                      PoolKey{ChainID: "31337", PoolID: 1},
 		TotalLendDeposited:       "100",
 		TotalCollateralDeposited: "10",
 		State:                    PoolStateFunding,
@@ -32,7 +32,7 @@ func TestMemoryStoreUpsertsAndListsPoolBases(t *testing.T) {
 		t.Fatalf("upsert pool base: %v", err)
 	}
 
-	pools, err := store.ListPoolBases(ctx, "97")
+	pools, err := store.ListPoolBases(ctx, "31337")
 	if err != nil {
 		t.Fatalf("list pool bases: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestMemoryStorePreservesCreatedAtOnPoolUpdate(t *testing.T) {
 	secondTime := firstTime.Add(time.Hour)
 
 	store.now = fixedClock(firstTime)
-	key := PoolKey{ChainID: "97", PoolID: 1}
+	key := PoolKey{ChainID: "31337", PoolID: 1}
 	if err := store.UpsertPoolData(ctx, PoolData{Key: key, SettleAmountLend: "100"}); err != nil {
 		t.Fatalf("upsert pool data: %v", err)
 	}
