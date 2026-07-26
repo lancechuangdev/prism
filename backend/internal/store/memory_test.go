@@ -5,8 +5,6 @@ import (
 	"errors"
 	"testing"
 	"time"
-
-	"github.com/lancechuangdev/prism/backend/internal/multisig"
 )
 
 func TestMemoryStoreUpsertsAndListsPoolBases(t *testing.T) {
@@ -87,38 +85,6 @@ func TestMemoryStoreReturnsErrNotFound(t *testing.T) {
 	_, err := store.GetToken(context.Background(), TokenKey{ChainID: "97", Address: "0xmissing"})
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
-	}
-}
-
-func TestMemoryStoreSavesMultiSignConfig(t *testing.T) {
-	ctx := context.Background()
-	store := NewMemoryStore()
-	now := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
-	store.SetClockForTest(func() time.Time { return now })
-
-	err := store.Save(ctx, multisig.Config{
-		ChainID:         "97",
-		ContractAddress: "0xmultisig",
-		Owners:          []string{"0xowner1"},
-		Threshold:       1,
-	})
-	if err != nil {
-		t.Fatalf("save multisig: %v", err)
-	}
-
-	cfg, err := store.Get(ctx, "97")
-	if err != nil {
-		t.Fatalf("get multisig: %v", err)
-	}
-	if cfg.ContractAddress != "0xmultisig" || len(cfg.Owners) != 1 || cfg.Threshold != 1 {
-		t.Fatalf("unexpected multisig config: %+v", cfg)
-	}
-}
-
-func TestMemoryStoreReturnsMultiSignNotFound(t *testing.T) {
-	_, err := NewMemoryStore().Get(context.Background(), "97")
-	if !errors.Is(err, multisig.ErrNotFound) {
-		t.Fatalf("expected multisig not found, got %v", err)
 	}
 }
 

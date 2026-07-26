@@ -3,6 +3,7 @@ x-prism-env: &prism-env
   PRISM_CHAIN_ID: "31337"
   PRISM_CHAIN_RPC_URL: http://host.docker.internal:8545
   PRISM_POOL_ADDRESS: "${PRISM_POOL_ADDRESS:?set PRISM_POOL_ADDRESS to the latest local deployment address}"
+  PRISM_MULTISIG_ADDRESS: "${PRISM_MULTISIG_ADDRESS:?set PRISM_MULTISIG_ADDRESS to the latest local deployment address}"
   PRISM_API_VERSION: "1"
   PRISM_STORE: mysql
   PRISM_MYSQL_DSN: "prism:prism@tcp(mysql:3306)/prism_backend?parseTime=true&charset=utf8mb4&loc=Local"

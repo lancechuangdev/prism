@@ -281,6 +281,12 @@ describe("ThresholdMultiSig administration", function () {
       asset.address,
       100_000_000,
     ]);
+    const oldHash = await multiSig.getTransactionHash(
+      oracleAddress,
+      0,
+      oracleData,
+      12,
+    );
     await multiSig
       .connect(owner)
       .approveTransaction(oracleAddress, 0, oracleData, 12);
@@ -295,6 +301,9 @@ describe("ThresholdMultiSig administration", function () {
     await approveAndExecute(owner, alice, multiSigAddress, 0, addOwnerData, 13);
 
     expect(await multiSig.configurationVersion()).to.equal(1n);
+    expect(await multiSig.transactionConfigurationVersion(oldHash)).to.equal(
+      1n,
+    );
     await expect(
       multiSig
         .connect(owner)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -56,15 +57,28 @@ type dataResponse[T any] struct {
 	Data T `json:"data"`
 }
 
-type setMultiSignRequest struct {
-	ChainID         string   `json:"chain_id"`
-	ContractAddress string   `json:"contract_address"`
-	Owners          []string `json:"owners"`
-	Threshold       uint64   `json:"threshold"`
+type prepareMultisigProposalRequest struct {
+	ChainID   string                   `json:"chain_id"`
+	Nonce     string                   `json:"nonce"`
+	Operation multisigOperationRequest `json:"operation"`
 }
 
-type getMultiSignRequest struct {
-	ChainID string `json:"chain_id"`
+type multisigOperationRequest struct {
+	Type                   string `json:"type"`
+	Owner                  string `json:"owner"`
+	OldOwner               string `json:"old_owner"`
+	NewOwner               string `json:"new_owner"`
+	Threshold              uint64 `json:"threshold"`
+	SettleTime             string `json:"settleTime"`
+	MaturityTime           string `json:"maturityTime"`
+	InterestRate           string `json:"interestRate"`
+	MaxLendSupply          string `json:"maxLendSupply"`
+	CollateralizationRatio string `json:"collateralizationRatio"`
+	LendToken              string `json:"lendToken"`
+	CollateralToken        string `json:"collateralToken"`
+	LenderPositionToken    string `json:"lenderPositionToken"`
+	BorrowerPositionToken  string `json:"borrowerPositionToken"`
+	LiquidateRate          string `json:"liquidateRate"`
 }
 
 type createPoolRequest struct {
@@ -84,7 +98,14 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func New(cfg config.Config, logger *slog.Logger, chainQueryService *chain.QueryService, poolTransactions chain.PoolTransactionPreparer, authService *auth.Service, priceService *price.Service, multisigService *multisig.Service) *http.Server {
+func New(cfg config.Config, 
+	logger *slog.Logger, 
+	chainQueryService *chain.QueryService, 
+	poolTransactions chain.PoolTransactionPreparer, 
+	multisigTransactions multisig.ProposalPreparer, 
+	multisigReader multisig.ChainReader, 
+	authService *auth.Service, 
+	priceService *price.Service) *http.Server {
 	mux := http.NewServeMux()
 	apiPrefix := "/api/v" + strings.TrimPrefix(cfg.APIVersion, "v")
 
@@ -233,41 +254,104 @@ func New(cfg config.Config, logger *slog.Logger, chainQueryService *chain.QueryS
 		writeJSON(w, http.StatusOK, dataResponse[chain.PreparedTransaction]{Data: result})
 	})))
 
-	mux.Handle("POST "+apiPrefix+"/pool/setMultiSign", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		req := setMultiSignRequest{}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid multisig body"})
-			return
-		}
-
-		cfg := multisig.Config{
-			ChainID:         req.ChainID,
-			ContractAddress: req.ContractAddress,
-			Owners:          req.Owners,
-			Threshold:       req.Threshold,
-		}
-		if err := multisigService.Set(r.Context(), cfg); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
-			return
-		}
-
-		writeJSON(w, http.StatusOK, dataResponse[multisig.Config]{Data: cfg})
-	})))
-
-	mux.Handle("POST "+apiPrefix+"/pool/getMultiSign", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		req := getMultiSignRequest{}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid multisig body"})
-			return
-		}
-
-		cfg, err := multisigService.Get(r.Context(), req.ChainID)
+	mux.HandleFunc("GET "+apiPrefix+"/multisig", func(w http.ResponseWriter, r *http.Request) {
+		result, err := multisigReader.Config(r.Context())
 		if err != nil {
-			writeJSON(w, http.StatusNotFound, errorResponse{Error: "multisig config not found"})
+			logger.Error("read multisig config failed", slog.Any("error", err))
+			writeJSON(w, http.StatusBadGateway, errorResponse{Error: "read multisig config failed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, dataResponse[multisig.Config]{Data: result})
+	})
+
+	mux.HandleFunc("GET "+apiPrefix+"/multisig/proposals/{txHash}", func(w http.ResponseWriter, r *http.Request) {
+		result, err := multisigReader.ProposalStatus(r.Context(), r.PathValue("txHash"))
+		if err != nil {
+			if errors.Is(err, multisig.ErrInvalidTransactionHash) {
+				writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+				return
+			}
+			logger.Error("read multisig proposal status failed", slog.Any("error", err))
+			writeJSON(w, http.StatusBadGateway, errorResponse{Error: "read multisig proposal status failed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, dataResponse[multisig.ProposalStatus]{Data: result})
+	})
+
+	mux.Handle("POST "+apiPrefix+"/multisig/proposals", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := prepareMultisigProposalRequest{}
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid multisig proposal body"})
 			return
 		}
 
-		writeJSON(w, http.StatusOK, dataResponse[multisig.Config]{Data: cfg})
+		multisigConfig, err := multisigReader.Config(r.Context())
+		if err != nil {
+			logger.Error("read multisig config failed", slog.Any("error", err))
+			writeJSON(w, http.StatusBadGateway, errorResponse{Error: "read multisig config failed"})
+			return
+		}
+		if req.ChainID != multisigConfig.ChainID {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "chain_id does not match the configured multisig"})
+			return
+		}
+
+		var result multisig.PreparedProposal
+		switch req.Operation.Type {
+		case multisig.OperationAddOwner, multisig.OperationRemoveOwner,
+			multisig.OperationReplaceOwner, multisig.OperationChangeThreshold:
+			result, err = multisigTransactions.PrepareConfigChange(r.Context(), multisig.ConfigChangeParams{
+				ChainID:         multisigConfig.ChainID,
+				MultisigAddress: multisigConfig.ContractAddress,
+				Operation:       req.Operation.Type,
+				Owner:           req.Operation.Owner,
+				OldOwner:        req.Operation.OldOwner,
+				NewOwner:        req.Operation.NewOwner,
+				Threshold:       req.Operation.Threshold,
+				Nonce:           req.Nonce,
+			})
+		case multisig.OperationCreatePool:
+			var poolTransaction chain.PreparedTransaction
+			poolTransaction, err = poolTransactions.PrepareCreatePool(r.Context(), chain.CreatePoolParams{
+				SettleTime: req.Operation.SettleTime, MaturityTime: req.Operation.MaturityTime,
+				InterestRate: req.Operation.InterestRate, MaxLendSupply: req.Operation.MaxLendSupply,
+				CollateralizationRatio: req.Operation.CollateralizationRatio,
+				LendToken:              req.Operation.LendToken, CollateralToken: req.Operation.CollateralToken,
+				LenderPositionToken:   req.Operation.LenderPositionToken,
+				BorrowerPositionToken: req.Operation.BorrowerPositionToken,
+				LiquidateRate:         req.Operation.LiquidateRate,
+			})
+			if err == nil {
+				result, err = multisigTransactions.PrepareProposal(r.Context(), multisig.ProposalParams{
+					ChainID: multisigConfig.ChainID, MultisigAddress: multisigConfig.ContractAddress,
+					Operation: multisig.OperationCreatePool,
+					Target:    poolTransaction.To, Value: poolTransaction.Value,
+					Data: poolTransaction.Data, Nonce: req.Nonce,
+				})
+			}
+		default:
+			err = fmt.Errorf("%w: unsupported operation %q", multisig.ErrInvalidProposal, req.Operation.Type)
+		}
+		if err != nil {
+			if errors.Is(err, multisig.ErrInvalidProposal) || errors.Is(err, chain.ErrInvalidCreatePool) {
+				writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+				return
+			}
+			logger.Error("prepare multisig proposal failed", slog.Any("error", err))
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "prepare multisig proposal failed"})
+			return
+		}
+
+		transactionHash, err := multisigReader.TransactionHash(r.Context(), result.Proposal)
+		if err != nil {
+			logger.Error("read multisig proposal hash failed", slog.Any("error", err))
+			writeJSON(w, http.StatusBadGateway, errorResponse{Error: "read multisig proposal hash failed"})
+			return
+		}
+		result.Proposal.TransactionHash = transactionHash
+		writeJSON(w, http.StatusOK, dataResponse[multisig.PreparedProposal]{Data: result})
 	})))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

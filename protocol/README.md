@@ -82,11 +82,14 @@ The command prints a JSON object containing the values needed by an RPC client a
 
 Contract addresses belong to the running local node. Restarting `npm run node` resets its chain state, so run `npm run deploy:local` again and use the newly generated addresses. The local deployment file is ignored by Git because its addresses are only valid for that running node.
 
-To pass the generated pool address to the Docker backend:
+To pass the generated contract addresses to the Docker backend:
 
 ```bash
 export PRISM_POOL_ADDRESS="$(
   jq -r '.prismPool' protocol/deployments/local.json
+)"
+export PRISM_MULTISIG_ADDRESS="$(
+  jq -r '.multisig' protocol/deployments/local.json
 )"
 docker compose up --build
 ```
@@ -154,6 +157,10 @@ Extract the ABI arrays from the full Hardhat artifacts:
 jq '.abi' \
   protocol/artifacts/contracts/pool/PrismPool.sol/PrismPool.json \
   > protocol/contracts/pool/PrismPool.abi.json
+
+jq '.abi' \
+  protocol/artifacts/contracts/admin/ThresholdMultiSig.sol/ThresholdMultiSig.json \
+  > protocol/contracts/admin/ThresholdMultiSig.abi.json
 ```
 
 Create the Go package directory and generate both bindings:
@@ -166,12 +173,20 @@ abigen \
   --pkg contracts \
   --type PrismPool \
   --out backend/internal/contracts/prism_pool.go
+
+abigen \
+  --abi protocol/contracts/admin/ThresholdMultiSig.abi.json \
+  --pkg contracts \
+  --type ThresholdMultiSig \
+  --out backend/internal/contracts/threshold_multi_sig.go
 ```
 
 Format and verify the generated code:
 
 ```bash
-go fmt -w backend/internal/contracts/prism_pool.go
+gofmt -w \
+  backend/internal/contracts/prism_pool.go \
+  backend/internal/contracts/threshold_multi_sig.go
 
 cd backend
 go test ./...

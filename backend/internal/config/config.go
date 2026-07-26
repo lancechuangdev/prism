@@ -25,46 +25,48 @@ const (
 )
 
 type Config struct {
-	Env           string
-	Port          string
-	APIVersion    string
-	ChainID       string
-	ChainRPCURL   string
-	PoolAddress   string
-	SyncInterval  time.Duration
-	AdminUsername string
-	AdminPassword string
-	TokenSecret   string
-	TokenTTL      time.Duration
-	PriceSymbol   string
-	StoreDriver   string
-	MySQLDSN      string
-	RedisAddress  string
-	RedisPassword string
-	RedisDB       int
-	PriceCacheTTL time.Duration
+	Env             string
+	Port            string
+	APIVersion      string
+	ChainID         string
+	ChainRPCURL     string
+	PoolAddress     string
+	MultisigAddress string
+	SyncInterval    time.Duration
+	AdminUsername   string
+	AdminPassword   string
+	TokenSecret     string
+	TokenTTL        time.Duration
+	PriceSymbol     string
+	StoreDriver     string
+	MySQLDSN        string
+	RedisAddress    string
+	RedisPassword   string
+	RedisDB         int
+	PriceCacheTTL   time.Duration
 }
 
 func Load() Config {
 	return Config{
-		Env:           readEnv("PRISM_ENV", defaultEnv),
-		Port:          readEnv("PRISM_API_PORT", defaultPort),
-		APIVersion:    readEnv("PRISM_API_VERSION", defaultAPIVersion),
-		ChainID:       readEnv("PRISM_CHAIN_ID", defaultChainId),
-		ChainRPCURL:   readEnv("PRISM_CHAIN_RPC_URL", defaultChainRPCURL),
-		PoolAddress:   readEnv("PRISM_POOL_ADDRESS", ""),
-		SyncInterval:  readDurationEnv("PRISM_SYNC_INTERVAL", defaultSyncEvery),
-		AdminUsername: readEnv("PRISM_ADMIN_USERNAME", defaultAdminUser),
-		AdminPassword: readEnv("PRISM_ADMIN_PASSWORD", defaultAdminPass),
-		TokenSecret:   readEnv("PRISM_TOKEN_SECRET", defaultTokenSecret),
-		TokenTTL:      readDurationEnv("PRISM_TOKEN_TTL", defaultTokenTTL),
-		PriceSymbol:   readEnv("PRISM_PRICE_SYMBOL", defaultPriceSymbol),
-		StoreDriver:   strings.ToLower(readEnv("PRISM_STORE", defaultStoreDriver)),
-		MySQLDSN:      readEnv("PRISM_MYSQL_DSN", ""),
-		RedisAddress:  readEnv("PRISM_REDIS_ADDR", defaultRedisAddr),
-		RedisPassword: readEnv("PRISM_REDIS_PASSWORD", ""),
-		RedisDB:       readIntEnv("PRISM_REDIS_DB", 0),
-		PriceCacheTTL: readDurationEnv("PRISM_PRICE_CACHE_TTL", defaultPriceTTL),
+		Env:             readEnv("PRISM_ENV", defaultEnv),
+		Port:            readEnv("PRISM_API_PORT", defaultPort),
+		APIVersion:      readEnv("PRISM_API_VERSION", defaultAPIVersion),
+		ChainID:         readEnv("PRISM_CHAIN_ID", defaultChainId),
+		ChainRPCURL:     readEnv("PRISM_CHAIN_RPC_URL", defaultChainRPCURL),
+		PoolAddress:     readEnv("PRISM_POOL_ADDRESS", ""),
+		MultisigAddress: readEnv("PRISM_MULTISIG_ADDRESS", ""),
+		SyncInterval:    readDurationEnv("PRISM_SYNC_INTERVAL", defaultSyncEvery),
+		AdminUsername:   readEnv("PRISM_ADMIN_USERNAME", defaultAdminUser),
+		AdminPassword:   readEnv("PRISM_ADMIN_PASSWORD", defaultAdminPass),
+		TokenSecret:     readEnv("PRISM_TOKEN_SECRET", defaultTokenSecret),
+		TokenTTL:        readDurationEnv("PRISM_TOKEN_TTL", defaultTokenTTL),
+		PriceSymbol:     readEnv("PRISM_PRICE_SYMBOL", defaultPriceSymbol),
+		StoreDriver:     strings.ToLower(readEnv("PRISM_STORE", defaultStoreDriver)),
+		MySQLDSN:        readEnv("PRISM_MYSQL_DSN", ""),
+		RedisAddress:    readEnv("PRISM_REDIS_ADDR", defaultRedisAddr),
+		RedisPassword:   readEnv("PRISM_REDIS_PASSWORD", ""),
+		RedisDB:         readIntEnv("PRISM_REDIS_DB", 0),
+		PriceCacheTTL:   readDurationEnv("PRISM_PRICE_CACHE_TTL", defaultPriceTTL),
 	}
 }
 

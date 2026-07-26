@@ -2,12 +2,9 @@ package store
 
 import (
 	"context"
-	"slices"
 	"sort"
 	"sync"
 	"time"
-
-	"github.com/lancechuangdev/prism/backend/internal/multisig"
 )
 
 type MemoryStore struct {
@@ -15,7 +12,6 @@ type MemoryStore struct {
 	poolBase map[PoolKey]PoolBase
 	poolData map[PoolKey]PoolData
 	tokens   map[TokenKey]TokenInfo
-	multisig map[string]multisig.Config
 	now      func() time.Time
 }
 
@@ -24,7 +20,6 @@ func NewMemoryStore() *MemoryStore {
 		poolBase: make(map[PoolKey]PoolBase),
 		poolData: make(map[PoolKey]PoolData),
 		tokens:   make(map[TokenKey]TokenInfo),
-		multisig: make(map[string]multisig.Config),
 		now:      time.Now,
 	}
 }
@@ -164,26 +159,4 @@ func (s *MemoryStore) ListTokens(_ context.Context, chainID string) ([]TokenInfo
 	})
 
 	return tokens, nil
-}
-
-func (s *MemoryStore) Save(_ context.Context, cfg multisig.Config) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	cfg.Owners = slices.Clone(cfg.Owners)
-
-	s.multisig[cfg.ChainID] = cfg
-	return nil
-}
-
-func (s *MemoryStore) Get(_ context.Context, chainID string) (multisig.Config, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	cfg, ok := s.multisig[chainID]
-	if !ok {
-		return multisig.Config{}, multisig.ErrNotFound
-	}
-	cfg.Owners = slices.Clone(cfg.Owners)
-	return cfg, nil
 }

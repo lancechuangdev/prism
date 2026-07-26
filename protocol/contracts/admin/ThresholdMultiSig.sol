@@ -10,6 +10,7 @@ contract ThresholdMultiSig {
 
     // Tracks the approval status of each transaction.
     mapping(bytes32 => uint256) public approvalCount; // tx hash => number of approvals
+    mapping(bytes32 => uint256) public transactionConfigurationVersion;
     mapping(bytes32 => bool) public executed; // tx hash => executed
     mapping(bytes32 => mapping(address => bool)) public hasApproved; // tx hash => owner => approved
 
@@ -129,6 +130,10 @@ contract ThresholdMultiSig {
         require(!executed[txHash], "Transaction already executed");
         require(!hasApproved[txHash][msg.sender], "Already approved by this owner");
 
+        if (approvalCount[txHash] == 0) {
+            // Store version + 1 so zero means this hash has never received an approval.
+            transactionConfigurationVersion[txHash] = configurationVersion + 1;
+        }
         hasApproved[txHash][msg.sender] = true;
         approvalCount[txHash] += 1;
 

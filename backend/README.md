@@ -11,7 +11,8 @@ It contains two executables:
   it to the configured repository, and refreshes the configured price quote
   through a Redis-backed cache.
 
-Both executables require `PRISM_POOL_ADDRESS`. They use
+Both executables require `PRISM_POOL_ADDRESS`; the API also requires
+`PRISM_MULTISIG_ADDRESS`. They use
 `PRISM_CHAIN_RPC_URL=http://127.0.0.1:8545` by default and verify that the RPC
 chain ID matches `PRISM_CHAIN_ID`. `DemoReader` is used only by tests.
 
@@ -102,8 +103,14 @@ Protected admin APIs:
 ```text
 GET  /api/v1/admin/session
 POST /api/v1/pools
-POST /api/v1/pool/setMultiSign
-POST /api/v1/pool/getMultiSign
+POST /api/v1/multisig/proposals
+```
+
+Public multisig reads:
+
+```text
+GET /api/v1/multisig
+GET /api/v1/multisig/proposals/{txHash}
 ```
 
 Protected routes require either header:
@@ -130,12 +137,13 @@ cd protocol
 npm run deploy:local
 ```
 
-Use the `chainId`, `rpcUrl`, and `prismPool` values printed by the deployment:
+Use the `chainId`, `rpcUrl`, `prismPool`, and `multisig` values printed by the deployment:
 
 ```text
 PRISM_CHAIN_ID=31337
 PRISM_CHAIN_RPC_URL=http://127.0.0.1:8545
 PRISM_POOL_ADDRESS=0x...
+PRISM_MULTISIG_ADDRESS=0x...
 ```
 
 The API and scheduler fail at startup when the RPC connection, chain ID, or
@@ -143,8 +151,7 @@ pool address is invalid.
 
 ### Create a pool
 
-Log in and pass the returned token as `Authorization: Bearer <tokenId>`. Then
-submit positive base-10 integer strings for every Solidity `uint256`:
+Log in and pass the returned token as `Authorization: Bearer <tokenId>`. Then submit positive base-10 integer strings for every Solidity `uint256`:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/pools \
@@ -164,16 +171,101 @@ curl -X POST http://localhost:8080/api/v1/pools \
   }'
 ```
 
-The API returns an unsigned transaction containing `to`, `data`, `value`, and
-`chainId`. A user wallet must sign and broadcast it. The contract still
-requires the signing wallet to be the current `PrismPool` owner. The backend
-does not receive or store a private key.
+The API returns an unsigned transaction containing `to`, `data`, `value`, and `chainId`. A user wallet must sign and broadcast it. The contract still requires the signing wallet to be the current `PrismPool` owner. The backend does not receive or store a private key.
+
+### Prepare a multisig proposal
+
+The configured contract at `PRISM_MULTISIG_ADDRESS` is the source of truth for owners and threshold. One proposal request encodes both the inner operation and its multisig approval and execution transactions.
+
+To prepare an owner update:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/multisig/proposals \
+  -H "Authorization: Bearer $TOKEN_ID" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chain_id": "31337",
+    "nonce": "1",
+    "operation": {
+      "type": "add_owner",
+      "owner": "0x3000000000000000000000000000000000000003"
+    }
+  }'
+```
+
+Supported configuration operations and their additional fields are:
+
+- `add_owner`: `owner`
+- `remove_owner`: `owner`
+- `replace_owner`: `old_owner` and `new_owner`
+- `change_threshold`: `threshold`
+
+For multisig-controlled pool creation, use `create_pool` and put the normal pool fields in the same operation object:
+
+```json
+{
+  "chain_id": "31337",
+  "nonce": "2",
+  "operation": {
+    "type": "create_pool",
+    "settleTime": "2000000000",
+    "maturityTime": "2000600000",
+    "interestRate": "1000000",
+    "maxLendSupply": "1000000000000000000000",
+    "collateralizationRatio": "200000000",
+    "lendToken": "0x...",
+    "collateralToken": "0x...",
+    "lenderPositionToken": "0x...",
+    "borrowerPositionToken": "0x...",
+    "liquidateRate": "20000000"
+  }
+}
+```
+
+`nonce` is a non-negative decimal string chosen by the caller. Clients should use a unique nonce for each proposal.
+
+The response contains the canonical inner `proposal` plus an unsigned `approvalTransaction` and `executionTransaction`.
+
+Every required owner wallet signs and broadcasts the identical approval transaction. After its on-chain approval count reaches the current threshold, an owner signs and broadcasts the execution transaction. The backend prepares calldata only; it never signs or broadcasts either transaction.
+
+```json
+{
+  "data": {
+    "proposal": {
+      "transactionHash": "0xProposalHash",
+      "operation": "add_owner",
+      "target": "0xMultisig",
+      "value": "0x0",
+      "data": "0xAddOwnerCalldata",
+      "nonce": "1"
+    },
+    "approvalTransaction": {
+      "to": "0xMultisig",
+      "data": "0xApproveTransactionCalldata",
+      "value": "0x0",
+      "chainId": "31337"
+    },
+    "executionTransaction": {
+      "to": "0xMultisig",
+      "data": "0xExecuteTransactionCalldata",
+      "value": "0x0",
+      "chainId": "31337"
+    }
+  }
+}
+```
+
+Read approval and execution status directly from the contract:
+
+```bash
+curl "http://localhost:8080/api/v1/multisig/proposals/0xProposalHash"
+```
+
+The response reports the current owners, each owner's approval, approval count, threshold, execution state, and whether the proposal was approved under the current multisig configuration. `readyToExecute` is true only when the threshold is reached, the proposal configuration is still valid, and the proposal has not executed.
 
 ## Cache
 
-The API and scheduler use Redis to cache price quotes under keys such as
-`price:PRM`. On a cache miss, they fetch the quote from the underlying provider
-and store it for `PRISM_PRICE_CACHE_TTL`.
+The API and scheduler use Redis to cache price quotes under keys such as `price:PRM`. On a cache miss, they fetch the quote from the underlying provider and store it for `PRISM_PRICE_CACHE_TTL`.
 
 Redis config:
 
@@ -192,6 +284,7 @@ PRISM_REDIS_ADDR=127.0.0.1:6379 \
 PRISM_PRICE_CACHE_TTL=30s \
 PRISM_CHAIN_ID=31337 \
 PRISM_POOL_ADDRESS=0x... \
+PRISM_MULTISIG_ADDRESS=0x... \
 PRISM_API_PORT=8080 \
 go run ./cmd/api
 
@@ -238,7 +331,6 @@ The MySQL store creates these tables if they do not exist:
 - `poolbases`
 - `pooldata`
 - `token_info`
-- `multisig_config`
 
 Run API with MySQL:
 
@@ -278,6 +370,7 @@ Run the stack with API, scheduler, MySQL, and Redis:
 ```bash
 cd backend
 PRISM_POOL_ADDRESS=0x... \
+PRISM_MULTISIG_ADDRESS=0x... \
 docker compose up --build
 ```
 
@@ -620,16 +713,17 @@ cd backend
 go test ./...
 ```
 
-## Step 8: Multisig/admin config API
+## Step 8: Multisig chain API
 
-- Add protected admin endpoints for chain-specific multisig metadata.
-- Store one multisig config per chain ID.
-- Require admin auth before reading or writing admin config.
+- Read owners, threshold, and proposal status from `ThresholdMultiSig`.
+- Configure the deployed contract with `PRISM_MULTISIG_ADDRESS`.
+- Require admin auth only when preparing a proposal.
 
 Files:
 
-- `internal/multisig/service.go`
-- `internal/multisig/service_test.go`
+- `internal/multisig/reader.go`
+- `internal/multisig/transaction.go`
+- `internal/multisig/transaction_test.go`
 - `internal/httpserver/server.go`
 - `internal/httpserver/server_test.go`
 - `cmd/api/main.go`
@@ -656,27 +750,16 @@ curl -X POST "http://localhost:8080/api/v1/user/login" \
   -d '{"name":"admin","password":"password"}'
 ```
 
-Set multisig config:
+Read the on-chain multisig config:
 
 ```bash
-curl -X POST "http://localhost:8080/api/v1/pool/setMultiSign" \
-  -H "Authorization: Bearer <tokenId>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chain_id":"97",
-    "contract_address":"0xmultisig",
-    "owners":["0xowner1","0xowner2"],
-    "threshold":2
-  }'
+curl "http://localhost:8080/api/v1/multisig"
 ```
 
-Get multisig config:
+Read an on-chain proposal status:
 
 ```bash
-curl -X POST "http://localhost:8080/api/v1/pool/getMultiSign" \
-  -H "Authorization: Bearer <tokenId>" \
-  -H "Content-Type: application/json" \
-  -d '{"chain_id":"97"}'
+curl "http://localhost:8080/api/v1/multisig/proposals/<txHash>"
 ```
 
 Run Go Tests:
@@ -686,13 +769,11 @@ cd backend
 go test ./...
 ```
 
-## Step 9: Shared store and MySQL
+## Step 9: Shared pool store and MySQL
 
-- Merge multisig persistence into the shared `store.Repository`.
-- Use one repository dependency for pool data, token metadata, and multisig config.
-- Keep `internal/multisig` focused on validation and service behavior.
+- Use one repository dependency for pool data and token metadata.
 - Add a MySQL-backed store behind the same repository interfaces used by the API and scheduler.
-- Preserve the backend's table concepts: pool base snapshots, pool settlement data, token metadata, and multisig config.
+- Preserve the backend's table concepts: pool base snapshots, pool settlement data, and token metadata.
 
 Files:
 
@@ -700,7 +781,6 @@ Files:
 - `internal/store/memory.go`
 - `internal/store/memory_test.go`
 - `internal/store/repository.go`
-- `internal/multisig/service.go`
 - `cmd/api/main.go`
 - `cmd/scheduler/main.go`
 - `internal/config/config.go`

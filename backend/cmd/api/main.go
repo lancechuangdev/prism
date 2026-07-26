@@ -44,6 +44,26 @@ func main() {
 	}
 	defer reader.Close()
 
+	multisigReader, err := multisig.NewRPCReader(
+		context.Background(),
+		cfg.ChainRPCURL,
+		cfg.MultisigAddress,
+	)
+	if err != nil {
+		logger.Error("open multisig RPC reader failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer multisigReader.Close()
+	multisigConfig, err := multisigReader.Config(context.Background())
+	if err != nil {
+		logger.Error("read multisig config failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	if multisigConfig.ChainID != cfg.ChainID {
+		logger.Error("multisig chain ID mismatch", slog.String("rpcChainID", multisigConfig.ChainID), slog.String("configuredChainID", cfg.ChainID))
+		os.Exit(1)
+	}
+
 	if err := chain.SyncPools(context.Background(), reader, repo, cfg.ChainID); err != nil {
 		logger.Error("sync contract data failed", slog.Any("error", err))
 		os.Exit(1)
@@ -52,6 +72,12 @@ func main() {
 	poolTransactions, err := chain.NewPoolTransactionBuilder(cfg.ChainID, cfg.PoolAddress)
 	if err != nil {
 		logger.Error("configure pool transaction builder failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+
+	multisigTransactions, err := multisig.NewTransactionBuilder(cfg.ChainID)
+	if err != nil {
+		logger.Error("configure multisig transaction builder failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 
@@ -72,8 +98,7 @@ func main() {
 	chainQueryService := chain.NewQueryService(repo)
 	priceProvider := price.NewCachedProvider(price.NewDemoProvider(), cacheStore, cfg.PriceCacheTTL)
 	priceService := price.NewService(priceProvider)
-	multisigService := multisig.NewService(repo)
-	server := httpserver.New(cfg, logger, chainQueryService, poolTransactions, authService, priceService, multisigService)
+	server := httpserver.New(cfg, logger, chainQueryService, poolTransactions, multisigTransactions, multisigReader, authService, priceService)
 
 	go func() {
 		logger.Info("api server starting", slog.String("addr", server.Addr))

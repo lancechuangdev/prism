@@ -148,11 +148,11 @@ Docker Compose is the shortest path because it supplies MySQL and Redis:
 ```bash
 cd backend
 PRISM_POOL_ADDRESS=0x... \
+PRISM_MULTISIG_ADDRESS=0x... \
 docker compose up --build
 ```
 
-Start the local Hardhat node with `--hostname 0.0.0.0` and run
-`npm run deploy:local` first. Use its `prismPool` address.
+Start the local Hardhat node with `--hostname 0.0.0.0` and run `npm run deploy:local` first. Use its `prismPool` and `multisig` addresses.
 
 The containers resolve `host.docker.internal` to the host-side Docker gateway, commonly `172.17.0.1` on Linux. Hardhat must listen on that interface; its default `127.0.0.1` binding accepts host-loopback connections only. Binding to `0.0.0.0` is intended for local development and may expose the development node to the local network, depending on the host firewall.
 
@@ -198,8 +198,9 @@ docker compose down -v
 | `POST` | `/api/v1/user/logout` | Bearer token |
 | `GET` | `/api/v1/admin/session` | Bearer token |
 | `POST` | `/api/v1/pools` | Bearer token; prepares unsigned `createPool` calldata |
-| `POST` | `/api/v1/pool/setMultiSign` | Bearer token |
-| `POST` | `/api/v1/pool/getMultiSign` | Bearer token |
+| `GET` | `/api/v1/multisig` | Public; reads owners and threshold on-chain |
+| `POST` | `/api/v1/multisig/proposals` | Bearer token; prepares approval and execution transactions |
+| `GET` | `/api/v1/multisig/proposals/{txHash}` | Public; reads on-chain approval status |
 
 The Compose configuration uses development credentials:
 
@@ -226,6 +227,7 @@ Do not use the Compose credentials or token secret in a public environment.
 | `PRISM_CHAIN_ID` | `31337` | Expected RPC chain ID and identifier used for indexed records. |
 | `PRISM_CHAIN_RPC_URL` | `http://127.0.0.1:8545` | Ethereum JSON-RPC endpoint. |
 | `PRISM_POOL_ADDRESS` | empty | Required deployed `PrismPool` contract address. |
+| `PRISM_MULTISIG_ADDRESS` | empty | Required deployed `ThresholdMultiSig` contract address. |
 | `PRISM_SYNC_INTERVAL` | `2m` | Scheduler synchronization interval. |
 | `PRISM_STORE` | `memory` | Repository driver: `memory` or `mysql`. |
 | `PRISM_MYSQL_DSN` | empty | MySQL connection string. |

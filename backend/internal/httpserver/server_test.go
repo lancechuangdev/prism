@@ -25,6 +25,44 @@ type testPoolTransactionPreparer struct {
 	params chain.CreatePoolParams
 }
 
+type testMultisigTransactionPreparer struct {
+	result         multisig.PreparedProposal
+	err            error
+	configParams   multisig.ConfigChangeParams
+	proposalParams multisig.ProposalParams
+}
+
+type testMultisigReader struct {
+	config multisig.Config
+	status multisig.ProposalStatus
+	hash   string
+	err    error
+}
+
+func (r *testMultisigReader) Config(_ context.Context) (multisig.Config, error) {
+	return r.config, r.err
+}
+
+func (r *testMultisigReader) ProposalStatus(_ context.Context, _ string) (multisig.ProposalStatus, error) {
+	return r.status, r.err
+}
+
+func (r *testMultisigReader) TransactionHash(_ context.Context, _ multisig.Proposal) (string, error) {
+	return r.hash, r.err
+}
+
+func (r *testMultisigReader) Close() {}
+
+func (p *testMultisigTransactionPreparer) PrepareConfigChange(_ context.Context, params multisig.ConfigChangeParams) (multisig.PreparedProposal, error) {
+	p.configParams = params
+	return p.result, p.err
+}
+
+func (p *testMultisigTransactionPreparer) PrepareProposal(_ context.Context, params multisig.ProposalParams) (multisig.PreparedProposal, error) {
+	p.proposalParams = params
+	return p.result, p.err
+}
+
 func (c *testPoolTransactionPreparer) PrepareCreatePool(_ context.Context, params chain.CreatePoolParams) (chain.PreparedTransaction, error) {
 	c.params = params
 	return c.result, c.err
@@ -271,59 +309,161 @@ func loginForTest(t *testing.T, server *http.Server) string {
 	return response.TokenID
 }
 
-func TestSetAndGetMultiSign(t *testing.T) {
+func TestGetMultisig(t *testing.T) {
 	server := newTestServer(t)
-	token := loginForTest(t, server)
-
-	body := bytes.NewBufferString(`{
-		"chain_id":"97",
-		"contract_address":"0xmultisig",
-		"owners":["0xowner1","0xowner2"],
-		"threshold":2
-	}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/pool/setMultiSign", body)
-	req.Header.Set("Authorization", "Bearer "+token)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/multisig", nil)
 	rec := httptest.NewRecorder()
 
 	server.Handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected set status %d, got %d", http.StatusOK, rec.Code)
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
-
-	body = bytes.NewBufferString(`{"chain_id":"97"}`)
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/pool/getMultiSign", body)
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec = httptest.NewRecorder()
-
-	server.Handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected get status %d, got %d", http.StatusOK, rec.Code)
-	}
-
 	var response dataResponse[multisig.Config]
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response.Data.ContractAddress != "0xmultisig" {
+	if response.Data.ContractAddress != "0x1000000000000000000000000000000000000001" ||
+		len(response.Data.Owners) != 2 || response.Data.Threshold != 2 {
 		t.Fatalf("unexpected multisig config: %+v", response.Data)
-	}
-	if len(response.Data.Owners) != 2 || response.Data.Threshold != 2 {
-		t.Fatalf("unexpected multisig owners or threshold: %+v", response.Data)
 	}
 }
 
-func TestSetMultiSignRequiresAuth(t *testing.T) {
-	server := newTestServer(t)
+func TestGetMultisigProposalStatus(t *testing.T) {
+	reader := defaultTestMultisigReader()
+	reader.status = multisig.ProposalStatus{
+		TransactionHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ApprovalCount:   2, Threshold: 2, ReadyToExecute: true,
+	}
+	server := newTestServerWithDependencies(t, &testPoolTransactionPreparer{}, &testMultisigTransactionPreparer{}, reader)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/multisig/proposals/0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", nil)
+	rec := httptest.NewRecorder()
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/pool/setMultiSign", bytes.NewBufferString(`{}`))
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	var response dataResponse[multisig.ProposalStatus]
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !response.Data.ReadyToExecute || response.Data.ApprovalCount != 2 {
+		t.Fatalf("unexpected proposal status: %+v", response.Data)
+	}
+}
+
+func TestPrepareMultisigConfigChangeProposal(t *testing.T) {
+	preparer := &testMultisigTransactionPreparer{
+		result: multisig.PreparedProposal{
+			Proposal: multisig.Proposal{
+				Operation: multisig.OperationAddOwner,
+				Target:    "0x1000000000000000000000000000000000000001",
+				Value:     "0x0",
+				Data:      "0x1234",
+				Nonce:     "7",
+			},
+			ApprovalTransaction: multisig.PreparedTransaction{
+				To: "0x1000000000000000000000000000000000000001", Data: "0x5678", Value: "0x0", ChainID: "97",
+			},
+			ExecutionTransaction: multisig.PreparedTransaction{
+				To: "0x1000000000000000000000000000000000000001", Data: "0x9abc", Value: "0x0", ChainID: "97",
+			},
+		},
+	}
+	server := newTestServerWithPreparers(t, &testPoolTransactionPreparer{}, preparer)
+	token := loginForTest(t, server)
+
+	body := bytes.NewBufferString(`{
+		"chain_id":"97",
+		"nonce":"7",
+		"operation":{
+			"type":"add_owner",
+			"owner":"0x3000000000000000000000000000000000000003"
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/multisig/proposals", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if preparer.configParams.ChainID != "97" ||
+		preparer.configParams.MultisigAddress != "0x1000000000000000000000000000000000000001" ||
+		preparer.configParams.Operation != multisig.OperationAddOwner ||
+		preparer.configParams.Owner != "0x3000000000000000000000000000000000000003" ||
+		preparer.configParams.Nonce != "7" {
+		t.Fatalf("unexpected prepare params: %+v", preparer.configParams)
+	}
+	var response dataResponse[multisig.PreparedProposal]
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Data.ApprovalTransaction.Data != "0x5678" ||
+		response.Data.ExecutionTransaction.Data != "0x9abc" {
+		t.Fatalf("unexpected prepared transactions: %+v", response.Data)
+	}
+}
+
+func TestPrepareMultisigCreatePoolProposal(t *testing.T) {
+	poolCreator := &testPoolTransactionPreparer{result: chain.PreparedTransaction{
+		To: "0x4000000000000000000000000000000000000004", Data: "0x12345678",
+		Value: "0x0", ChainID: "97",
+	}}
+	preparer := &testMultisigTransactionPreparer{result: multisig.PreparedProposal{
+		Proposal: multisig.Proposal{Operation: multisig.OperationCreatePool},
+	}}
+	server := newTestServerWithPreparers(t, poolCreator, preparer)
+	token := loginForTest(t, server)
+
+	body := bytes.NewBufferString(`{
+		"chain_id":"97",
+		"nonce":"8",
+		"operation":{
+			"type":"create_pool",
+			"settleTime":"2000000000",
+			"maturityTime":"2000600000",
+			"interestRate":"1000000",
+			"maxLendSupply":"1000000000000000000000",
+			"collateralizationRatio":"200000000",
+			"lendToken":"0x1000000000000000000000000000000000000001",
+			"collateralToken":"0x2000000000000000000000000000000000000002",
+			"lenderPositionToken":"0x3000000000000000000000000000000000000003",
+			"borrowerPositionToken":"0x4000000000000000000000000000000000000004",
+			"liquidateRate":"20000000"
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/multisig/proposals", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if poolCreator.params.MaxLendSupply != "1000000000000000000000" {
+		t.Fatalf("unexpected pool params: %+v", poolCreator.params)
+	}
+	if preparer.proposalParams.Operation != multisig.OperationCreatePool ||
+		preparer.proposalParams.MultisigAddress != "0x1000000000000000000000000000000000000001" ||
+		preparer.proposalParams.Target != "0x4000000000000000000000000000000000000004" ||
+		preparer.proposalParams.Data != "0x12345678" ||
+		preparer.proposalParams.Nonce != "8" {
+		t.Fatalf("unexpected proposal params: %+v", preparer.proposalParams)
+	}
+}
+
+func TestPrepareMultisigProposalRequiresAuth(t *testing.T) {
+	server := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/multisig/proposals", bytes.NewBufferString(`{}`))
 	rec := httptest.NewRecorder()
 
 	server.Handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected unauthorized status %d, got %d", http.StatusUnauthorized, rec.Code)
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
 	}
 }
 
@@ -332,6 +472,14 @@ func newTestServer(t *testing.T) *http.Server {
 }
 
 func newTestServerWithPoolCreator(t *testing.T, poolCreator chain.PoolTransactionPreparer) *http.Server {
+	return newTestServerWithPreparers(t, poolCreator, &testMultisigTransactionPreparer{})
+}
+
+func newTestServerWithPreparers(t *testing.T, poolCreator chain.PoolTransactionPreparer, multisigPreparer multisig.ProposalPreparer) *http.Server {
+	return newTestServerWithDependencies(t, poolCreator, multisigPreparer, defaultTestMultisigReader())
+}
+
+func newTestServerWithDependencies(t *testing.T, poolCreator chain.PoolTransactionPreparer, multisigPreparer multisig.ProposalPreparer, multisigReader multisig.ChainReader) *http.Server {
 	t.Helper()
 
 	repo := store.NewMemoryStore()
@@ -350,8 +498,20 @@ func newTestServerWithPoolCreator(t *testing.T, poolCreator chain.PoolTransactio
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		chain.NewQueryService(repo),
 		poolCreator,
+		multisigPreparer,
+		multisigReader,
 		auth,
 		price.NewService(price.NewDemoProvider()),
-		multisig.NewService(repo),
 	)
+}
+
+func defaultTestMultisigReader() *testMultisigReader {
+	return &testMultisigReader{config: multisig.Config{
+		ChainID: "97", ContractAddress: "0x1000000000000000000000000000000000000001",
+		Owners: []string{
+			"0x2000000000000000000000000000000000000002",
+			"0x3000000000000000000000000000000000000003",
+		},
+		Threshold: 2,
+	}, hash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
 }

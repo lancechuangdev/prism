@@ -9,8 +9,6 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-
-	"github.com/lancechuangdev/prism/backend/internal/multisig"
 )
 
 type MySQLStore struct {
@@ -98,16 +96,6 @@ func (s *MySQLStore) Migrate(ctx context.Context) error {
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,
 			UNIQUE KEY uniq_token_info_chain_token (chain_id, token)
-		)`,
-		`CREATE TABLE IF NOT EXISTS multisig_config (
-			id BIGINT AUTO_INCREMENT PRIMARY KEY,
-			chain_id VARCHAR(32) NOT NULL,
-			contract_address VARCHAR(128) NOT NULL,
-			owners JSON NOT NULL,
-			threshold BIGINT UNSIGNED NOT NULL,
-			created_at DATETIME NOT NULL,
-			updated_at DATETIME NOT NULL,
-			UNIQUE KEY uniq_multisig_config_chain (chain_id)
 		)`,
 	}
 
@@ -330,44 +318,4 @@ func scanToken(row rowScanner) (TokenInfo, error) {
 		return TokenInfo{}, ErrNotFound
 	}
 	return token, err
-}
-
-// Multisign
-func (s *MySQLStore) Save(ctx context.Context, cfg multisig.Config) error {
-	now := s.now().UTC()
-	owners, err := json.Marshal(cfg.Owners)
-	if err != nil {
-		return err
-	}
-
-	_, err = s.db.ExecContext(ctx, `INSERT INTO multisig_config (
-		chain_id, contract_address, owners, threshold, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?)
-	ON DUPLICATE KEY UPDATE
-		contract_address=VALUES(contract_address),
-		owners=VALUES(owners),
-		threshold=VALUES(threshold),
-		updated_at=VALUES(updated_at)`,
-		cfg.ChainID, cfg.ContractAddress, string(owners), cfg.Threshold, now, now,
-	)
-	return err
-}
-
-func (s *MySQLStore) Get(ctx context.Context, chainID string) (multisig.Config, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT chain_id, contract_address, owners, threshold
-		FROM multisig_config WHERE chain_id=?`, chainID)
-
-	cfg := multisig.Config{}
-	ownersJSON := ""
-	err := row.Scan(&cfg.ChainID, &cfg.ContractAddress, &ownersJSON, &cfg.Threshold)
-	if errors.Is(err, sql.ErrNoRows) {
-		return multisig.Config{}, multisig.ErrNotFound
-	}
-	if err != nil {
-		return multisig.Config{}, err
-	}
-	if err := json.Unmarshal([]byte(ownersJSON), &cfg.Owners); err != nil {
-		return multisig.Config{}, err
-	}
-	return cfg, nil
 }
