@@ -124,6 +124,53 @@ approvals, and executes it. It then verifies that the pool became `ACTIVE` or
 `CANCELLED` and waits for the backend to index that state. The seed pool has no
 deposits, so settling pool `0` normally moves it to `CANCELLED`.
 
+Prepare the latest funding pool for the local repayment integration:
+
+```bash
+npm run setup-repay:local
+```
+
+The setup helper mints assets to local lender and borrower accounts, deposits
+both sides, configures the collateral-to-lend `FixedRateSwap` rate, funds the
+swap with lend-token liquidity, advances to settlement, and settles through an
+API-prepared multisig proposal. It finishes with the selected pool `ACTIVE`.
+It targets the latest pool by default; select another funding pool with
+`PRISM_POOL_ID`.
+
+The default local sequence is:
+
+```bash
+npm run create-pool:api
+npm run setup-repay:local
+PRISM_POOL_ID=1 npm run repay-pool:api
+```
+
+All setup token quantities are decimal strings expressed in each token’s smallest unit. `PRISM_SETUP_SWAP_RATE` is a decimal fixed-point exchange rate scaled by 1e18. And they can be overridden:
+
+```bash
+PRISM_POOL_ID=1 \
+PRISM_SETUP_LEND_AMOUNT=1000000000000000000000 \
+PRISM_SETUP_COLLATERAL_AMOUNT=1000000000000000000 \
+PRISM_SETUP_SWAP_RATE=3000000000000000000000 \
+PRISM_SETUP_SWAP_LIQUIDITY=100000000000000000000000 \
+npm run setup-repay:local
+```
+
+The repayment helper defaults `maxCollateralAmount` to the pool's settled
+collateral; override that limit in the collateral token's smallest unit when
+needed:
+
+```bash
+PRISM_POOL_ID=1 \
+PRISM_MAX_COLLATERAL_AMOUNT=5000000000000000000 \
+npm run repay-pool:api
+```
+
+The helper preflights the swap quote and liquidity, advances the local Hardhat
+timestamp to maturity, requests and validates a `repay_pool` proposal,
+broadcasts its approvals and execution, verifies the `REPAID` state, and waits
+for the backend to index that state.
+
 ## Multisig administration
 
 `ThresholdMultiSig` supports `addOwner`,`removeOwner`, `replaceOwner`, and `changeThreshold`. These functions use `onlySelf`, so no owner can call them directly. Owners must approve identical transaction parameters targeting the multisig itself, after which an owner executes the approved transaction.

@@ -319,7 +319,44 @@ settlement time when necessary, obtains and validates the backend-prepared
 `settle_pool` proposal, broadcasts the multisig approvals and execution, then
 waits for the backend to index the resulting `ACTIVE` or `CANCELLED` state.
 
-#### 9. Query the indexed pool information
+#### 9. Repay an active pool through the integration helper
+
+Prepare the latest `FUNDING` pool with deposits, a fixed swap rate, and swap
+liquidity, then settle it through the API into `ACTIVE`:
+
+```bash
+cd protocol
+npm run setup-repay:local
+```
+
+The intended fresh sequence is:
+
+```bash
+npm run create-pool:api
+npm run setup-repay:local
+PRISM_POOL_ID=1 npm run repay-pool:api
+```
+
+The setup helper targets the latest pool by default. `PRISM_POOL_ID` can select
+another funding pool. Its local token amounts and swap configuration can be
+overridden with `PRISM_SETUP_LEND_AMOUNT`, `PRISM_SETUP_COLLATERAL_AMOUNT`,
+`PRISM_SETUP_SWAP_RATE`, and `PRISM_SETUP_SWAP_LIQUIDITY`.
+
+By default, the helper permits selling up to all settled pool collateral.
+Override the maximum in the collateral token's smallest unit when needed:
+
+```bash
+PRISM_POOL_ID=1 \
+PRISM_MAX_COLLATERAL_AMOUNT=5000000000000000000 \
+npm run repay-pool:api
+```
+
+The helper checks the swap quote and liquidity, advances local Hardhat time to
+maturity, obtains and validates the backend-prepared `repay_pool` proposal,
+executes the multisig flow, verifies state `REPAID`, and waits for the backend
+to index it.
+
+#### 10. Query the indexed pool information
 
 ```bash
 curl -s \
@@ -337,7 +374,7 @@ curl -s \
 
 The scheduler synchronizes every 30 seconds. The integration helper waits up to 90 seconds for its new pool, but a manual query immediately after another on-chain transaction may briefly return the previous snapshot.
 
-#### 10. Stop the backend stack
+#### 11. Stop the backend stack
 
 From the `backend` directory, preserve the MySQL volume with:
 

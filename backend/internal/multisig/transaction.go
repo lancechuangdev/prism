@@ -22,6 +22,7 @@ const (
 	OperationChangeThreshold = "change_threshold"
 	OperationCreatePool      = "create_pool"
 	OperationSettlePool      = "settle_pool"
+	OperationRepayPool       = "repay_pool"
 )
 
 type ConfigChangeParams struct {

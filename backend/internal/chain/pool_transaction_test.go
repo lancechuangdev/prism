@@ -91,6 +91,67 @@ func TestPrepareSettlePoolRejectsInvalidPoolID(t *testing.T) {
 	}
 }
 
+func TestPrepareRepayPool(t *testing.T) {
+	builder, err := NewPoolTransactionBuilder("31337", "0x1000000000000000000000000000000000000001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := builder.PrepareRepayPool(context.Background(), RepayPoolParams{
+		PoolID: "42", MaxCollateralAmount: "5000000000000000000",
+	})
+	if err != nil {
+		t.Fatalf("prepare transaction: %v", err)
+	}
+	if tx.To != "0x1000000000000000000000000000000000000001" ||
+		tx.ChainID != "31337" ||
+		tx.Value != "0x0" {
+		t.Fatalf("unexpected transaction: %+v", tx)
+	}
+
+	contractABI, err := contracts.PrismPoolMetaData.GetAbi()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := hexutil.Decode(tx.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	method, err := contractABI.MethodById(data[:4])
+	if err != nil {
+		t.Fatal(err)
+	}
+	values, err := method.Inputs.Unpack(data[4:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method.Name != "repayPool" ||
+		len(values) != 2 ||
+		values[0].(*big.Int).Cmp(big.NewInt(42)) != 0 ||
+		values[1].(*big.Int).Cmp(big.NewInt(5_000_000_000_000_000_000)) != 0 {
+		t.Fatalf("unexpected repayPool calldata: method=%s values=%v", method.Name, values)
+	}
+}
+
+func TestPrepareRepayPoolRejectsInvalidParams(t *testing.T) {
+	builder, err := NewPoolTransactionBuilder("31337", "0x1000000000000000000000000000000000000001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tooLarge := new(big.Int).Lsh(big.NewInt(1), 256).String()
+	for _, params := range []RepayPoolParams{
+		{PoolID: "-1", MaxCollateralAmount: "1"},
+		{PoolID: tooLarge, MaxCollateralAmount: "1"},
+		{PoolID: "0", MaxCollateralAmount: "0"},
+		{PoolID: "0", MaxCollateralAmount: "not-a-number"},
+		{PoolID: "0", MaxCollateralAmount: tooLarge},
+	} {
+		_, err = builder.PrepareRepayPool(context.Background(), params)
+		if !errors.Is(err, ErrInvalidRepayPool) {
+			t.Fatalf("params %+v: expected invalid request error, got %v", params, err)
+		}
+	}
+}
+
 func validCreatePoolParams() CreatePoolParams {
 	return CreatePoolParams{
 		SettleTime: "2000000000", MaturityTime: "2000600000",
