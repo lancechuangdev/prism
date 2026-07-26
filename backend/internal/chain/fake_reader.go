@@ -5,13 +5,13 @@ import (
 	"fmt"
 )
 
-type DemoReader struct {
+type FakeReader struct {
 	pools  map[string][]ContractPoolBase       // chainID -> poolIndex -> poolBase
 	data   map[string][]ContractPoolData       // chainID -> dataIndex -> poolData
 	tokens map[string]map[string]ContractToken // chainID -> tokenAddress -> tokenInfo
 }
 
-func NewDemoReader() *DemoReader {
+func NewFakeReader() *FakeReader {
 	busd := ContractToken{
 		Address:  "0xbusd",
 		Symbol:   "BUSD",
@@ -29,7 +29,7 @@ func NewDemoReader() *DemoReader {
 		Decimals: 18,
 	}
 
-	return &DemoReader{
+	return &FakeReader{
 		pools: map[string][]ContractPoolBase{
 			"31337": {
 				{
@@ -70,11 +70,11 @@ func NewDemoReader() *DemoReader {
 	}
 }
 
-func (r *DemoReader) PoolLength(_ context.Context, chainID string) (int64, error) {
+func (r *FakeReader) PoolLength(_ context.Context, chainID string) (int64, error) {
 	return int64(len(r.pools[chainID])), nil
 }
 
-func (r *DemoReader) PoolBaseInfo(_ context.Context, chainID string, contractIndex int64) (ContractPoolBase, error) {
+func (r *FakeReader) PoolBaseInfo(_ context.Context, chainID string, contractIndex int64) (ContractPoolBase, error) {
 	pools := r.pools[chainID]
 	if contractIndex < 0 || contractIndex >= int64(len(pools)) {
 		return ContractPoolBase{}, fmt.Errorf("pool base index %d not found on chain %s", contractIndex, chainID)
@@ -82,7 +82,7 @@ func (r *DemoReader) PoolBaseInfo(_ context.Context, chainID string, contractInd
 	return pools[contractIndex], nil
 }
 
-func (r *DemoReader) PoolDataInfo(_ context.Context, chainID string, contractIndex int64) (ContractPoolData, error) {
+func (r *FakeReader) PoolDataInfo(_ context.Context, chainID string, contractIndex int64) (ContractPoolData, error) {
 	pools := r.data[chainID]
 	if contractIndex < 0 || contractIndex >= int64(len(pools)) {
 		return ContractPoolData{}, fmt.Errorf("pool data index %d not found on chain %s", contractIndex, chainID)
@@ -90,7 +90,7 @@ func (r *DemoReader) PoolDataInfo(_ context.Context, chainID string, contractInd
 	return pools[contractIndex], nil
 }
 
-func (r *DemoReader) TokenInfo(_ context.Context, chainID string, tokenAddress string) (ContractToken, error) {
+func (r *FakeReader) TokenInfo(_ context.Context, chainID string, tokenAddress string) (ContractToken, error) {
 	tokens := r.tokens[chainID]
 	token, ok := tokens[tokenAddress]
 	if !ok {

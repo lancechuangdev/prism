@@ -10,7 +10,7 @@ import (
 func TestQueryServiceListsPoolsAndTokens(t *testing.T) {
 	ctx := context.Background()
 	repo := store.NewMemoryStore()
-	if err := SyncPools(ctx, NewDemoReader(), repo, "31337"); err != nil {
+	if err := SyncPools(ctx, NewFakeReader(), repo, "31337"); err != nil {
 		t.Fatalf("sync pools: %v", err)
 	}
 

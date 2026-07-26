@@ -503,7 +503,7 @@ func newTestServerWithDependencies(t *testing.T, poolCreator chain.PoolTransacti
 	t.Helper()
 
 	repo := store.NewMemoryStore()
-	if err := chain.SyncPools(context.Background(), chain.NewDemoReader(), repo, "31337"); err != nil {
+	if err := chain.SyncPools(context.Background(), chain.NewFakeReader(), repo, "31337"); err != nil {
 		t.Fatalf("sync demo contract data: %v", err)
 	}
 

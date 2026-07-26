@@ -3,20 +3,14 @@
 The Prism backend is a Go service that exposes pool, token, price, authentication, and multisignature-management APIs.
 It contains two executables:
 
-- `cmd/api` starts the HTTP server. On startup, it reads chain data over
-  Ethereum JSON-RPC and stores a snapshot in the configured repository
-  (`memory` or `mysql`). Pool and token requests read that indexed data through
-  the chain query service.
-- `cmd/scheduler` periodically reads chain data over Ethereum JSON-RPC, writes it to the configured repository, and refreshes the configured price quote
-  through a Redis-backed cache.
+- `cmd/api` starts the HTTP server. On startup, it reads chain data over Ethereum JSON-RPC and stores a snapshot in the configured repository (`memory` or `mysql`). Pool and token requests read that indexed data through the chain query service.
+- `cmd/scheduler` periodically reads chain data over Ethereum JSON-RPC, writes it to the configured repository, and refreshes the configured price quote through a Redis-backed cache.
 
-Both executables require `PRISM_POOL_ADDRESS`; the API also requires `PRISM_MULTISIG_ADDRESS`. They use `PRISM_CHAIN_RPC_URL=http://127.0.0.1:8545` by default and verify that the RPC chain ID matches `PRISM_CHAIN_ID`.`DemoReader` is used only by tests.
+Both executables require `PRISM_POOL_ADDRESS`; the API also requires `PRISM_MULTISIG_ADDRESS`. They use `PRISM_CHAIN_RPC_URL=http://127.0.0.1:8545` by default and verify that the RPC chain ID matches `PRISM_CHAIN_ID`. `FakeReader` is used only by tests.
 
 Selecting MySQL for both executables gives the API and scheduler a shared, persistent repository.
 
-Both executables use Redis to cache price quotes for the configured TTL. On a
-cache miss, the cached provider fetches a fresh quote from the underlying price
-provider.
+Both executables use Redis to cache price quotes for the configured TTL. On a cache miss, the cached provider fetches a fresh quote from the underlying price provider.
 
 Docker Compose runs the API, scheduler, MySQL, and Redis as separate containers on a shared network.
 
@@ -554,8 +548,7 @@ cd backend
 go test ./...
 ```
 
-For now, Step 4 uses `DemoReader` instead of a real RPC client. The next real
-reader can implement the same `chain.Reader` interface.
+This step originally used a fake reader while the API shape was being built. The current API and scheduler use `RPCReader` in all runtime environments, including the local Hardhat network. Unit tests use `FakeReader` as a deterministic `chain.Reader` fixture.
 
 ## Step 5: Scheduler
 
