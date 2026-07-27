@@ -377,6 +377,10 @@ Important:
 Redis must be running before starting the API or scheduler.
 ```
 
+### Production configuration validation
+
+With `PRISM_ENV=production`, each executable validates its configuration before opening external connections. API and scheduler require `PRISM_STORE=mysql`, a non-empty `PRISM_MYSQL_DSN`, a deployed pool address, Redis TLS, and an HTTPS quote provider. The API also requires a multisig address, non-default admin credentials, an admin password of at least 12 characters, and a token secret of at least 32 characters. The migration executable validates only its MySQL settings because it does not use contracts, Redis, quotes, or authentication.
+
 ## Storage
 
 The backend supports two storage modes:

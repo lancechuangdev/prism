@@ -15,8 +15,8 @@ import (
 func main() {
 	cfg := config.Load()
 	logger := logging.New(cfg.Env)
-	if cfg.StoreDriver != "mysql" {
-		logger.Error("migration requires PRISM_STORE=mysql")
+	if err := cfg.Validate(config.ComponentMigration); err != nil {
+		logger.Error("invalid configuration", slog.Any("error", err))
 		os.Exit(1)
 	}
 

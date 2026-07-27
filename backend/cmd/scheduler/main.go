@@ -21,6 +21,10 @@ import (
 func main() {
 	cfg := config.Load()
 	logger := logging.New(cfg.Env)
+	if err := cfg.Validate(config.ComponentScheduler); err != nil {
+		logger.Error("invalid configuration", slog.Any("error", err))
+		os.Exit(1)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

@@ -26,6 +26,10 @@ import (
 func main() {
 	cfg := config.Load()
 	logger := logging.New(cfg.Env)
+	if err := cfg.Validate(config.ComponentAPI); err != nil {
+		logger.Error("invalid configuration", slog.Any("error", err))
+		os.Exit(1)
+	}
 
 	repo, closeStore, err := openStore(context.Background(), cfg)
 	if err != nil {

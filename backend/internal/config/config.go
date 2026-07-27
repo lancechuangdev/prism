@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -24,6 +25,10 @@ const (
 	defaultStoreDriver   = "memory"
 	defaultRedisAddr     = "127.0.0.1:6379"
 	defaultPriceTTL      = 30 * time.Second
+
+	ComponentAPI       = "api"
+	ComponentScheduler = "scheduler"
+	ComponentMigration = "migration"
 )
 
 type Config struct {
@@ -80,6 +85,67 @@ func Load() Config {
 		RedisTLSServerName: readEnv("PRISM_REDIS_TLS_SERVER_NAME", ""),
 		PriceCacheTTL:      readDurationEnv("PRISM_PRICE_CACHE_TTL", defaultPriceTTL),
 	}
+}
+
+// Validate checks configuration required by a specific executable. Production
+// validation rejects development fallbacks instead of silently starting with
+// ephemeral storage or known credentials.
+func (c Config) Validate(component string) error {
+	if component != ComponentAPI && component != ComponentScheduler && component != ComponentMigration {
+		return fmt.Errorf("unknown component %q", component)
+	}
+
+	var problems []error
+	if c.StoreDriver != "memory" && c.StoreDriver != "mysql" {
+		problems = append(problems, fmt.Errorf("PRISM_STORE must be memory or mysql"))
+	}
+	if c.StoreDriver == "mysql" && strings.TrimSpace(c.MySQLDSN) == "" {
+		problems = append(problems, fmt.Errorf("PRISM_MYSQL_DSN is required when PRISM_STORE=mysql"))
+	}
+	if component == ComponentMigration && c.StoreDriver != "mysql" {
+		problems = append(problems, fmt.Errorf("PRISM_STORE must be mysql for migrations"))
+	}
+
+	if !strings.EqualFold(c.Env, "production") {
+		return errors.Join(problems...)
+	}
+
+	if c.StoreDriver != "mysql" {
+		problems = append(problems, fmt.Errorf("PRISM_STORE must be mysql in production"))
+	}
+	if component == ComponentMigration {
+		return errors.Join(problems...)
+	}
+
+	if strings.TrimSpace(c.PoolAddress) == "" {
+		problems = append(problems, fmt.Errorf("PRISM_POOL_ADDRESS is required in production"))
+	}
+	if !c.RedisTLS {
+		problems = append(problems, fmt.Errorf("PRISM_REDIS_TLS must be true in production"))
+	}
+	if !strings.EqualFold(c.PriceProvider, "http") {
+		problems = append(problems, fmt.Errorf("PRISM_PRICE_PROVIDER must be http in production"))
+	}
+	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(c.PriceProviderURL)), "https://") {
+		problems = append(problems, fmt.Errorf("PRISM_PRICE_PROVIDER_URL must use HTTPS in production"))
+	}
+
+	if component == ComponentAPI {
+		if strings.TrimSpace(c.MultisigAddress) == "" {
+			problems = append(problems, fmt.Errorf("PRISM_MULTISIG_ADDRESS is required in production"))
+		}
+		if strings.TrimSpace(c.AdminUsername) == "" || strings.TrimSpace(c.AdminUsername) == defaultAdminUser {
+			problems = append(problems, fmt.Errorf("PRISM_ADMIN_USERNAME must not use the development default in production"))
+		}
+		if len(c.AdminPassword) < 12 || strings.TrimSpace(c.AdminPassword) == defaultAdminPass {
+			problems = append(problems, fmt.Errorf("PRISM_ADMIN_PASSWORD must contain at least 12 characters and not use the development default in production"))
+		}
+		if len(c.TokenSecret) < 32 || strings.TrimSpace(c.TokenSecret) == defaultTokenSecret {
+			problems = append(problems, fmt.Errorf("PRISM_TOKEN_SECRET must contain at least 32 characters and not use the development default in production"))
+		}
+	}
+
+	return errors.Join(problems...)
 }
 
 func readBoolEnv(key string, fallback bool) bool {
