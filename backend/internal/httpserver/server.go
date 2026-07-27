@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lancechuangdev/prism/backend/internal/auth"
 	"github.com/lancechuangdev/prism/backend/internal/chain"
@@ -18,6 +19,14 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/multisig"
 	"github.com/lancechuangdev/prism/backend/internal/price"
 	"github.com/lancechuangdev/prism/backend/internal/store"
+)
+
+const (
+	httpReadHeaderTimeout = 5 * time.Second
+	httpReadTimeout       = 15 * time.Second
+	httpWriteTimeout      = 30 * time.Second
+	httpIdleTimeout       = 60 * time.Second
+	httpMaxHeaderBytes    = 1 << 20
 )
 
 type healthResponse struct {
@@ -436,8 +445,13 @@ func New(cfg config.Config,
 	})
 
 	return &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: requestLogger(logger, mux),
+		Addr:              ":" + cfg.Port,
+		Handler:           requestLogger(logger, mux),
+		ReadHeaderTimeout: httpReadHeaderTimeout,
+		ReadTimeout:       httpReadTimeout,
+		WriteTimeout:      httpWriteTimeout,
+		IdleTimeout:       httpIdleTimeout,
+		MaxHeaderBytes:    httpMaxHeaderBytes,
 	}
 }
 

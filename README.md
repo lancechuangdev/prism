@@ -476,7 +476,7 @@ Do not use the Compose credentials or token secret in a public environment.
 | `PRISM_TOKEN_SECRET` | `local-development-secret` | HMAC token-signing secret. |
 | `PRISM_TOKEN_TTL` | `1h` | Authentication token lifetime. |
 
-When `PRISM_ENV=production`, startup fails unless persistent MySQL, verified Redis TLS, an HTTPS quote provider, and deployed contract addresses are configured. The API additionally rejects the development admin credentials and requires an admin password of at least 12 characters and a token secret of at least 32 characters. Validation is role-aware, so the scheduler does not require API authentication settings and the one-shot migration command only requires MySQL.
+When `PRISM_ENV=production`, startup fails unless persistent MySQL, verified Redis TLS, an HTTPS quote provider, and deployed contract addresses are configured. The API additionally rejects the development admin credentials and requires an admin password of at least 12 characters and a token secret of at least 32 characters. Validation is role-aware, so the scheduler does not require API authentication settings and the one-shot migration command only requires MySQL. The API also sets bounded HTTP read, write, idle, and header limits for operation behind a load balancer.
 
 See [`backend/README.md`](./backend/README.md) for endpoint payloads, storage
 details, and the backend's implementation history.

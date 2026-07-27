@@ -585,6 +585,26 @@ func TestPrepareMultisigProposalRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestServerHasBoundedHTTPTimeouts(t *testing.T) {
+	server := newTestServer(t)
+
+	if server.ReadHeaderTimeout != httpReadHeaderTimeout {
+		t.Errorf("read header timeout = %s", server.ReadHeaderTimeout)
+	}
+	if server.ReadTimeout != httpReadTimeout {
+		t.Errorf("read timeout = %s", server.ReadTimeout)
+	}
+	if server.WriteTimeout != httpWriteTimeout {
+		t.Errorf("write timeout = %s", server.WriteTimeout)
+	}
+	if server.IdleTimeout != httpIdleTimeout {
+		t.Errorf("idle timeout = %s", server.IdleTimeout)
+	}
+	if server.MaxHeaderBytes != httpMaxHeaderBytes {
+		t.Errorf("max header bytes = %d", server.MaxHeaderBytes)
+	}
+}
+
 func newTestServer(t *testing.T) *http.Server {
 	return newTestServerWithPoolCreator(t, &testPoolTransactionPreparer{})
 }
