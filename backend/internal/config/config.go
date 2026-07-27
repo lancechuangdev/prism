@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -47,6 +48,8 @@ type Config struct {
 	RedisAddress       string
 	RedisPassword      string
 	RedisDB            int
+	RedisTLS           bool
+	RedisTLSServerName string
 	PriceCacheTTL      time.Duration
 }
 
@@ -73,8 +76,22 @@ func Load() Config {
 		RedisAddress:       readEnv("PRISM_REDIS_ADDR", defaultRedisAddr),
 		RedisPassword:      readEnv("PRISM_REDIS_PASSWORD", ""),
 		RedisDB:            readIntEnv("PRISM_REDIS_DB", 0),
+		RedisTLS:           readBoolEnv("PRISM_REDIS_TLS", false),
+		RedisTLSServerName: readEnv("PRISM_REDIS_TLS_SERVER_NAME", ""),
 		PriceCacheTTL:      readDurationEnv("PRISM_PRICE_CACHE_TTL", defaultPriceTTL),
 	}
+}
+
+func readBoolEnv(key string, fallback bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func readEnv(key string, fallback string) string {

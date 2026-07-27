@@ -462,6 +462,8 @@ Do not use the Compose credentials or token secret in a public environment.
 | `PRISM_REDIS_ADDR` | `127.0.0.1:6379` | Redis address. |
 | `PRISM_REDIS_PASSWORD` | empty | Redis password. |
 | `PRISM_REDIS_DB` | `0` | Redis database number. |
+| `PRISM_REDIS_TLS` | `false` | Enable verified Redis TLS; required when `PRISM_ENV=production`. |
+| `PRISM_REDIS_TLS_SERVER_NAME` | derived from address | Optional certificate server-name override. |
 | `PRISM_PRICE_SYMBOL` | `PRM` | Symbol refreshed by the scheduler. |
 | `PRISM_PRICE_PROVIDER` | `local` | Price adapter: `local` for development or `http`; production rejects `local`. |
 | `PRISM_PRICE_PROVIDER_URL` | empty | HTTPS quote endpoint used by the `http` provider. |

@@ -305,9 +305,27 @@ Redis config:
 PRISM_REDIS_ADDR=127.0.0.1:6379
 PRISM_REDIS_PASSWORD=
 PRISM_REDIS_DB=0
+PRISM_REDIS_TLS=false
 PRISM_PRICE_CACHE_TTL=30s
 PRISM_PRICE_PROVIDER=local
 ```
+
+Production requires Redis TLS:
+
+```text
+PRISM_ENV=production
+PRISM_REDIS_ADDR=master.example.cache.amazonaws.com:6379
+PRISM_REDIS_PASSWORD=<secret>
+PRISM_REDIS_TLS=true
+PRISM_REDIS_TLS_SERVER_NAME=
+```
+
+When `PRISM_REDIS_TLS_SERVER_NAME` is empty, the client derives it from
+`PRISM_REDIS_ADDR`. Set it explicitly only when the certificate name differs
+from the connection hostname. The client requires TLS 1.2 or newer and verifies
+the server certificate against the container's trusted CA certificates.
+Production API and scheduler processes refuse to start when
+`PRISM_REDIS_TLS=false`.
 
 For production, configure an HTTPS endpoint:
 

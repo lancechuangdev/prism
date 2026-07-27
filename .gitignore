@@ -7,6 +7,8 @@ build/
 bundle/
 artifacts/
 cache/
+!backend/internal/cache/
+!backend/internal/cache/*.go
 types/
 coverage/
 

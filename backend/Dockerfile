@@ -15,8 +15,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /out/scheduler ./cmd/scheduler
 # Use a small runtime image that does not include the Go toolchain.
 FROM alpine:3.22
 
-# Run the application as an unprivileged user.
-RUN adduser -D -g '' appuser
+# Install trusted root certificates for HTTPS and Redis TLS, then run the
+# application as an unprivileged user.
+RUN apk add --no-cache ca-certificates && adduser -D -g '' appuser
 
 WORKDIR /app
 

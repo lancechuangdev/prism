@@ -150,9 +150,12 @@ func openStore(ctx context.Context, cfg config.Config) (store.Repository, func()
 
 func openCache(ctx context.Context, cfg config.Config) (cache.Cache, func(), error) {
 	redisCache, err := cache.OpenRedis(ctx, cache.RedisConfig{
-		Address:  cfg.RedisAddress,
-		Password: cfg.RedisPassword,
-		DB:       cfg.RedisDB,
+		Address:       cfg.RedisAddress,
+		Password:      cfg.RedisPassword,
+		DB:            cfg.RedisDB,
+		TLSEnabled:    cfg.RedisTLS,
+		TLSServerName: cfg.RedisTLSServerName,
+		RequireTLS:    strings.EqualFold(cfg.Env, "production"),
 	})
 	if err != nil {
 		return nil, nil, err

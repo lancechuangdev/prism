@@ -23,3 +23,17 @@ func TestLoadChainRPCConfiguration(t *testing.T) {
 		t.Fatalf("multisig address = %q", cfg.MultisigAddress)
 	}
 }
+
+func TestLoadRedisTLSConfiguration(t *testing.T) {
+	t.Setenv("PRISM_REDIS_TLS", "true")
+	t.Setenv("PRISM_REDIS_TLS_SERVER_NAME", "master.prism.cache.amazonaws.com")
+
+	cfg := Load()
+
+	if !cfg.RedisTLS {
+		t.Fatal("expected Redis TLS to be enabled")
+	}
+	if cfg.RedisTLSServerName != "master.prism.cache.amazonaws.com" {
+		t.Fatalf("Redis TLS server name = %q", cfg.RedisTLSServerName)
+	}
+}
