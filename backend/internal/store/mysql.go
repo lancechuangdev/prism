@@ -36,11 +36,6 @@ func OpenMySQL(ctx context.Context, dsn string) (*MySQLStore, error) {
 		return nil, err
 	}
 
-	if err := store.Migrate(ctx); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-
 	return store, nil
 }
 
@@ -49,8 +44,72 @@ func (s *MySQLStore) Close() error {
 }
 
 func (s *MySQLStore) Migrate(ctx context.Context) error {
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS poolbases (
+	if err := validateMySQLMigrations(); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version BIGINT PRIMARY KEY,
+			applied_at DATETIME NOT NULL
+		)`); err != nil {
+		return fmt.Errorf("create schema migrations table: %w", err)
+	}
+	var lockAcquired int
+	if err := s.db.QueryRowContext(ctx, `SELECT GET_LOCK('prism_schema_migrations', 30)`).Scan(&lockAcquired); err != nil {
+		return fmt.Errorf("acquire migration lock: %w", err)
+	}
+	if lockAcquired != 1 {
+		return fmt.Errorf("acquire migration lock: timed out")
+	}
+	defer func() {
+		_, _ = s.db.ExecContext(context.Background(), `SELECT RELEASE_LOCK('prism_schema_migrations')`)
+	}()
+
+	for _, migration := range mysqlMigrations {
+		var exists bool
+
+		err := s.db.QueryRowContext(
+			ctx,
+			`SELECT EXISTS(
+				SELECT 1
+				FROM schema_migrations
+				WHERE version = ?
+			)`,
+			migration.version,
+		).Scan(&exists)
+		if err != nil {
+			return fmt.Errorf("check migration %d: %w", migration.version, err)
+		}
+		if exists {
+			continue
+		}
+		for _, statement := range migration.statements {
+			if _, err := s.db.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("apply migration %d: %w", migration.version, err)
+			}
+		}
+		if _, err := s.db.ExecContext(
+			ctx,
+			`INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)`,
+			migration.version,
+			time.Now().UTC(),
+		); err != nil {
+			return fmt.Errorf("record migration %d: %w", migration.version, err)
+		}
+	}
+	return nil
+}
+
+type mysqlMigration struct {
+	version    int64
+	statements []string
+}
+
+var mysqlMigrations = []mysqlMigration{
+	{
+		version: 1,
+		statements: []string{
+			`CREATE TABLE IF NOT EXISTS poolbases (
 			id BIGINT AUTO_INCREMENT PRIMARY KEY,
 			chain_id VARCHAR(32) NOT NULL,
 			pool_id BIGINT NOT NULL,
@@ -71,7 +130,7 @@ func (s *MySQLStore) Migrate(ctx context.Context) error {
 			updated_at DATETIME NOT NULL,
 			UNIQUE KEY uniq_poolbases_chain_pool (chain_id, pool_id)
 		)`,
-		`CREATE TABLE IF NOT EXISTS pooldata (
+			`CREATE TABLE IF NOT EXISTS pooldata (
 			id BIGINT AUTO_INCREMENT PRIMARY KEY,
 			chain_id VARCHAR(32) NOT NULL,
 			pool_id BIGINT NOT NULL,
@@ -85,7 +144,7 @@ func (s *MySQLStore) Migrate(ctx context.Context) error {
 			updated_at DATETIME NOT NULL,
 			UNIQUE KEY uniq_pooldata_chain_pool (chain_id, pool_id)
 		)`,
-		`CREATE TABLE IF NOT EXISTS token_info (
+			`CREATE TABLE IF NOT EXISTS token_info (
 			id BIGINT AUTO_INCREMENT PRIMARY KEY,
 			chain_id VARCHAR(32) NOT NULL,
 			token VARCHAR(128) NOT NULL,
@@ -97,14 +156,21 @@ func (s *MySQLStore) Migrate(ctx context.Context) error {
 			updated_at DATETIME NOT NULL,
 			UNIQUE KEY uniq_token_info_chain_token (chain_id, token)
 		)`,
-	}
+		},
+	},
+}
 
-	for _, statement := range statements {
-		if _, err := s.db.ExecContext(ctx, statement); err != nil {
-			return err
+func validateMySQLMigrations() error {
+	var previous int64
+	for _, migration := range mysqlMigrations {
+		if migration.version <= previous {
+			return fmt.Errorf("MySQL migrations must have strictly increasing positive versions")
 		}
+		if len(migration.statements) == 0 {
+			return fmt.Errorf("MySQL migration %d has no statements", migration.version)
+		}
+		previous = migration.version
 	}
-
 	return nil
 }
 

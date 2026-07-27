@@ -1,12 +1,13 @@
 # Prism Backend
 
-The Prism backend is a Go service that exposes pool, token, price, authentication, and multisignature-management APIs.
-It contains two executables:
+The Prism backend is a Go service that exposes pool, token, quote, authentication, and multisignature-management APIs.
+It contains three executables:
 
 - `cmd/api` starts the HTTP server. On startup, it reads chain data over Ethereum JSON-RPC and stores a snapshot in the configured repository (`memory` or `mysql`). Pool and token requests read that indexed data through the chain query service.
 - `cmd/scheduler` periodically reads chain data over Ethereum JSON-RPC, writes it to the configured repository, and refreshes the configured price quote through a Redis-backed cache.
+- `cmd/migrate` applies ordered MySQL schema migrations and exits.
 
-Both executables require `PRISM_POOL_ADDRESS`; the API also requires `PRISM_MULTISIG_ADDRESS`. They use `PRISM_CHAIN_RPC_URL=http://127.0.0.1:8545` by default and verify that the RPC chain ID matches `PRISM_CHAIN_ID`. `FakeReader` is used only by tests.
+The API and scheduler require `PRISM_POOL_ADDRESS`; the API also requires `PRISM_MULTISIG_ADDRESS`. They use `PRISM_CHAIN_RPC_URL=http://127.0.0.1:8545` by default and verify that the RPC chain ID matches `PRISM_CHAIN_ID`. `FakeReader` is used only by tests.
 
 Selecting MySQL for both executables gives the API and scheduler a shared, persistent repository.
 
@@ -437,9 +438,18 @@ Important:
 Use parseTime=true in the DSN so MySQL DATETIME columns scan into Go time.Time.
 ```
 
+Run migrations before starting either process with MySQL:
+
+```bash
+cd backend
+PRISM_STORE=mysql \
+PRISM_MYSQL_DSN="prism:prism@tcp(127.0.0.1:3306)/prism_backend?parseTime=true&charset=utf8mb4&loc=Local" \
+go run ./cmd/migrate
+```
+
 ## Docker Compose
 
-Run the stack with API, scheduler, MySQL, and Redis:
+Run the stack with migration, API, scheduler, MySQL, and Redis services:
 
 ```bash
 cd backend
@@ -448,8 +458,7 @@ PRISM_MULTISIG_ADDRESS=0x... \
 docker compose up --build
 ```
 
-Compose connects the API and scheduler to the Hardhat node running on the host
-and uses chain ID `31337`. On Linux, Compose maps `host.docker.internal` to Docker's host gateway:
+Compose connects the API and scheduler to the Hardhat node running on the host and uses chain ID `31337`. On Linux, Compose maps `host.docker.internal` to Docker's host gateway:
 
 ```yaml
 extra_hosts:
@@ -457,6 +466,8 @@ extra_hosts:
 ```
 
 The gateway is commonly `172.17.0.1`, not `127.0.0.1`, because loopback inside a container refers to that container. The mapping identifies how to reach the host, while `--hostname 0.0.0.0` makes Hardhat accept the connection on the host's Docker bridge interface. Both pieces are required for this setup.
+
+Compose waits for MySQL health, runs the one-shot `migrate` service, and starts the API and scheduler only after migration succeeds.
 
 Binding Hardhat to `0.0.0.0` is for local development only and may expose its development accounts and RPC methods to the local network, depending on the host firewall.
 
@@ -486,12 +497,14 @@ docker compose down -v
 ```
 RUN go build -o /out/api ./cmd/api
 RUN go build -o /out/scheduler ./cmd/scheduler
+RUN go build -o /out/migrate ./cmd/migrate
 ```
 
 `docker-compose.yml` describes which containers to run together.
 ```
 run api
 run scheduler
+run one-shot migrations before api and scheduler
 run mysql
 run redis
 connect them with env vars

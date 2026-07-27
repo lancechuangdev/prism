@@ -11,6 +11,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/api ./cmd/api
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/scheduler ./cmd/scheduler
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/migrate ./cmd/migrate
 
 # Use a small runtime image that does not include the Go toolchain.
 FROM alpine:3.22
@@ -24,6 +25,7 @@ WORKDIR /app
 # Copy only the compiled binaries from the build stage.
 COPY --from=build /out/api /app/api
 COPY --from=build /out/scheduler /app/scheduler
+COPY --from=build /out/migrate /app/migrate
 
 USER appuser
 

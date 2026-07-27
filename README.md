@@ -102,10 +102,11 @@ administration.
 
 ## Backend
 
-The backend is a Go module with two executables:
+The backend is a Go module with three executables:
 
 - `cmd/api` performs an initial pool sync, serves public and protected HTTP endpoints, and shuts down gracefully on `SIGINT` or `SIGTERM`.
 - `cmd/scheduler` performs an initial sync and repeats it according to `PRISM_SYNC_INTERVAL`.
+- `cmd/migrate` applies versioned MySQL schema migrations and exits.
 
 Both processes can use an in-memory repository or MySQL. They use Redis for
 price caching, and the API uses Redis for shared login sessions. Price cache
@@ -133,12 +134,13 @@ Start the local Hardhat node with `--hostname 0.0.0.0` and run `npm run deploy:l
 
 The containers resolve `host.docker.internal` to the host-side Docker gateway, commonly `172.17.0.1` on Linux. Hardhat must listen on that interface; its default `127.0.0.1` binding accepts host-loopback connections only. Binding to `0.0.0.0` is intended for local development and may expose the development node to the local network, depending on the host firewall.
 
-This starts four containers:
+This starts five containers:
 
 | Service | Purpose | Host port |
 | --- | --- | --- |
 | `api` | HTTP API | `8080` |
 | `scheduler` | Periodic pool and price synchronization | none |
+| `migrate` | One-shot versioned MySQL migrations | none |
 | `mysql` | Persistent indexed state | `3306` |
 | `redis` | Price cache | `6379` |
 
@@ -496,6 +498,7 @@ go test ./...
 └── backend/
     ├── cmd/api/         API executable
     ├── cmd/scheduler/   Scheduler executable
+    ├── cmd/migrate/     MySQL migration executable
     ├── internal/        Services, adapters, storage, cache, and HTTP server
     │   └── contracts/   Generated Go contract bindings
     ├── Dockerfile       Multi-stage Go image
