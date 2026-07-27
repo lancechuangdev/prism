@@ -129,7 +129,8 @@ func New(cfg config.Config,
 	poolTransactions chain.PoolTransactionPreparer,
 	multisigTransactions multisig.ProposalPreparer,
 	multisigReader multisig.ChainReader,
-	authService *auth.Service,
+	localAuth *auth.LocalAuthenticator,
+	authorizer auth.Authorizer,
 	priceService *price.Service) *http.Server {
 	mux := http.NewServeMux()
 	apiPrefix := "/api/v" + strings.TrimPrefix(cfg.APIVersion, "v")
@@ -202,38 +203,40 @@ func New(cfg config.Config,
 		writeJSON(w, http.StatusOK, tokenListResponse{Data: tokens})
 	})
 
-	mux.HandleFunc("POST "+apiPrefix+"/user/login", func(w http.ResponseWriter, r *http.Request) {
-		req := loginRequest{}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid login body"})
-			return
-		}
-
-		token, err := authService.Login(r.Context(), req.Name, req.Password)
-		if err != nil {
-			if errors.Is(err, auth.ErrInvalidCredentials) {
-				writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid username or password"})
-			} else {
-				logger.Error("create login session failed", slog.Any("error", err))
-				writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "login failed"})
+	if cfg.AuthMode != "cognito" {
+		mux.HandleFunc("POST "+apiPrefix+"/user/login", func(w http.ResponseWriter, r *http.Request) {
+			req := loginRequest{}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid login body"})
+				return
 			}
-			return
-		}
 
-		writeJSON(w, http.StatusOK, loginResponse{TokenID: token})
-	})
+			token, err := localAuth.Login(r.Context(), req.Name, req.Password)
+			if err != nil {
+				if errors.Is(err, auth.ErrInvalidCredentials) {
+					writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid username or password"})
+				} else {
+					logger.Error("create login session failed", slog.Any("error", err))
+					writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "login failed"})
+				}
+				return
+			}
 
-	mux.Handle("POST "+apiPrefix+"/user/logout", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := tokenFromRequest(r)
-		if err := authService.Logout(r.Context(), token); err != nil {
-			logger.Error("delete login session failed", slog.Any("error", err))
-			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "logout failed"})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})))
+			writeJSON(w, http.StatusOK, loginResponse{TokenID: token})
+		})
 
-	mux.Handle("GET "+apiPrefix+"/admin/session", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mux.Handle("POST "+apiPrefix+"/user/logout", requireAuth(authorizer, "", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := tokenFromRequest(r)
+			if err := localAuth.Logout(r.Context(), token); err != nil {
+				logger.Error("delete login session failed", slog.Any("error", err))
+				writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "logout failed"})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		})))
+	}
+
+	mux.Handle("GET "+apiPrefix+"/admin/session", requireAuth(authorizer, cfg.AdminReadScope, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		username, ok := usernameFromContext(r.Context())
 		if !ok {
 			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "unauthorized"})
@@ -281,7 +284,7 @@ func New(cfg config.Config,
 		writeJSON(w, http.StatusOK, dataResponse[multisig.ProposalStatus]{Data: result})
 	})
 
-	mux.Handle("POST "+apiPrefix+"/multisig/proposals", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("POST "+apiPrefix+"/multisig/proposals", requireAuth(authorizer, cfg.ProposalWriteScope, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		req := prepareMultisigProposalRequest{}
 		decoder := json.NewDecoder(r.Body)
 		decoder.DisallowUnknownFields()
@@ -485,16 +488,24 @@ func requireChainID(w http.ResponseWriter, r *http.Request) (string, bool) {
 	return chainID, true
 }
 
-func requireAuth(authService *auth.Service, next http.Handler) http.Handler {
+func requireAuth(authorizer auth.Authorizer, requiredScope string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := tokenFromRequest(r)
-		username, err := authService.Authenticate(r.Context(), token)
+		var scopes []string
+		if requiredScope != "" {
+			scopes = append(scopes, requiredScope)
+		}
+		identity, err := authorizer.Authorize(r.Context(), token, scopes...)
 		if err != nil {
+			if errors.Is(err, auth.ErrInsufficientScope) {
+				writeJSON(w, http.StatusForbidden, errorResponse{Error: "insufficient scope"})
+				return
+			}
 			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid token"})
 			return
 		}
 
-		ctx := contextWithUsername(r, username)
+		ctx := contextWithUsername(r, identity.Username)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

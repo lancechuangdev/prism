@@ -18,14 +18,14 @@ var (
 	ErrInvalidToken       = errors.New("invalid token")
 )
 
-type Config struct {
+type LocalConfig struct {
 	AdminUsername string
 	AdminPassword string
 	TokenSecret   string
 	TokenTTL      time.Duration
 }
 
-type Service struct {
+type LocalAuthenticator struct {
 	adminUsername string
 	adminPassword string
 	tokenSecret   []byte
@@ -40,8 +40,8 @@ type tokenPayload struct {
 	Nonce     string `json:"nonce"`
 }
 
-func NewService(cfg Config, sessions SessionStore) *Service {
-	return &Service{
+func NewLocalAuthenticator(cfg LocalConfig, sessions SessionStore) *LocalAuthenticator {
+	return &LocalAuthenticator{
 		adminUsername: cfg.AdminUsername,
 		adminPassword: cfg.AdminPassword,
 		tokenSecret:   []byte(cfg.TokenSecret),
@@ -51,7 +51,7 @@ func NewService(cfg Config, sessions SessionStore) *Service {
 	}
 }
 
-func (s *Service) Login(ctx context.Context, username string, password string) (string, error) {
+func (s *LocalAuthenticator) Login(ctx context.Context, username string, password string) (string, error) {
 	if username != s.adminUsername || password != s.adminPassword {
 		return "", ErrInvalidCredentials
 	}
@@ -74,7 +74,7 @@ func (s *Service) Login(ctx context.Context, username string, password string) (
 	return token, nil
 }
 
-func (s *Service) Logout(ctx context.Context, rawToken string) error {
+func (s *LocalAuthenticator) Logout(ctx context.Context, rawToken string) error {
 	token := strings.TrimSpace(rawToken)
 	if token == "" {
 		return nil
@@ -82,7 +82,7 @@ func (s *Service) Logout(ctx context.Context, rawToken string) error {
 	return s.sessions.Delete(ctx, sessionKey(token))
 }
 
-func (s *Service) Authenticate(ctx context.Context, rawToken string) (string, error) {
+func (s *LocalAuthenticator) Authenticate(ctx context.Context, rawToken string) (string, error) {
 	token := strings.TrimSpace(rawToken)
 	if token == "" {
 		return "", ErrInvalidToken
@@ -124,7 +124,7 @@ func randomNonce() string {
 	return base64.RawURLEncoding.EncodeToString(bytes)
 }
 
-func (s *Service) sign(payload tokenPayload) (string, error) {
+func (s *LocalAuthenticator) sign(payload tokenPayload) (string, error) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
@@ -138,7 +138,7 @@ func (s *Service) sign(payload tokenPayload) (string, error) {
 	return encodedPayload + "." + signature, nil
 }
 
-func (s *Service) verify(token string) (tokenPayload, error) {
+func (s *LocalAuthenticator) verify(token string) (tokenPayload, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
 		return tokenPayload{}, ErrInvalidToken

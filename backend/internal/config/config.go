@@ -20,6 +20,9 @@ const (
 	defaultAdminPass     = "password"
 	defaultTokenTTL      = time.Hour
 	defaultTokenSecret   = "local-development-secret"
+	defaultAuthMode      = "local"
+	defaultProposalScope = "prism/proposals.write"
+	defaultAdminScope    = "prism/admin.read"
 	defaultPriceSymbol   = "PRM"
 	defaultPriceProvider = "local"
 	defaultStoreDriver   = "memory"
@@ -44,6 +47,12 @@ type Config struct {
 	AdminPassword      string
 	TokenSecret        string
 	TokenTTL           time.Duration
+	AuthMode           string
+	CognitoRegion      string
+	CognitoUserPoolID  string
+	CognitoClientID    string
+	ProposalWriteScope string
+	AdminReadScope     string
 	PriceSymbol        string
 	PriceProvider      string
 	PriceProviderURL   string
@@ -72,6 +81,12 @@ func Load() Config {
 		AdminPassword:      readEnv("PRISM_ADMIN_PASSWORD", defaultAdminPass),
 		TokenSecret:        readEnv("PRISM_TOKEN_SECRET", defaultTokenSecret),
 		TokenTTL:           readDurationEnv("PRISM_TOKEN_TTL", defaultTokenTTL),
+		AuthMode:           strings.ToLower(readEnv("PRISM_AUTH_MODE", defaultAuthMode)),
+		CognitoRegion:      readEnv("PRISM_COGNITO_REGION", ""),
+		CognitoUserPoolID:  readEnv("PRISM_COGNITO_USER_POOL_ID", ""),
+		CognitoClientID:    readEnv("PRISM_COGNITO_CLIENT_ID", ""),
+		ProposalWriteScope: readEnv("PRISM_COGNITO_PROPOSAL_SCOPE", defaultProposalScope),
+		AdminReadScope:     readEnv("PRISM_COGNITO_ADMIN_SCOPE", defaultAdminScope),
 		PriceSymbol:        readEnv("PRISM_PRICE_SYMBOL", defaultPriceSymbol),
 		PriceProvider:      readEnv("PRISM_PRICE_PROVIDER", defaultPriceProvider),
 		PriceProviderURL:   readEnv("PRISM_PRICE_PROVIDER_URL", ""),
@@ -98,6 +113,9 @@ func (c Config) Validate(component string) error {
 	var problems []error
 	if c.StoreDriver != "memory" && c.StoreDriver != "mysql" {
 		problems = append(problems, fmt.Errorf("PRISM_STORE must be memory or mysql"))
+	}
+	if component == ComponentAPI && c.AuthMode != "" && c.AuthMode != "local" && c.AuthMode != "cognito" {
+		problems = append(problems, fmt.Errorf("PRISM_AUTH_MODE must be local or cognito"))
 	}
 	if c.StoreDriver == "mysql" && strings.TrimSpace(c.MySQLDSN) == "" {
 		problems = append(problems, fmt.Errorf("PRISM_MYSQL_DSN is required when PRISM_STORE=mysql"))
@@ -134,14 +152,32 @@ func (c Config) Validate(component string) error {
 		if strings.TrimSpace(c.MultisigAddress) == "" {
 			problems = append(problems, fmt.Errorf("PRISM_MULTISIG_ADDRESS is required in production"))
 		}
-		if strings.TrimSpace(c.AdminUsername) == "" || strings.TrimSpace(c.AdminUsername) == defaultAdminUser {
-			problems = append(problems, fmt.Errorf("PRISM_ADMIN_USERNAME must not use the development default in production"))
-		}
-		if len(c.AdminPassword) < 12 || strings.TrimSpace(c.AdminPassword) == defaultAdminPass {
-			problems = append(problems, fmt.Errorf("PRISM_ADMIN_PASSWORD must contain at least 12 characters and not use the development default in production"))
-		}
-		if len(c.TokenSecret) < 32 || strings.TrimSpace(c.TokenSecret) == defaultTokenSecret {
-			problems = append(problems, fmt.Errorf("PRISM_TOKEN_SECRET must contain at least 32 characters and not use the development default in production"))
+		if c.AuthMode == "cognito" {
+			if strings.TrimSpace(c.CognitoRegion) == "" {
+				problems = append(problems, fmt.Errorf("PRISM_COGNITO_REGION is required with Cognito authentication"))
+			}
+			if strings.TrimSpace(c.CognitoUserPoolID) == "" {
+				problems = append(problems, fmt.Errorf("PRISM_COGNITO_USER_POOL_ID is required with Cognito authentication"))
+			}
+			if strings.TrimSpace(c.CognitoClientID) == "" {
+				problems = append(problems, fmt.Errorf("PRISM_COGNITO_CLIENT_ID is required with Cognito authentication"))
+			}
+			if strings.TrimSpace(c.ProposalWriteScope) == "" {
+				problems = append(problems, fmt.Errorf("PRISM_COGNITO_PROPOSAL_SCOPE is required with Cognito authentication"))
+			}
+			if strings.TrimSpace(c.AdminReadScope) == "" {
+				problems = append(problems, fmt.Errorf("PRISM_COGNITO_ADMIN_SCOPE is required with Cognito authentication"))
+			}
+		} else {
+			if strings.TrimSpace(c.AdminUsername) == "" || strings.TrimSpace(c.AdminUsername) == defaultAdminUser {
+				problems = append(problems, fmt.Errorf("PRISM_ADMIN_USERNAME must not use the development default in production"))
+			}
+			if len(c.AdminPassword) < 12 || strings.TrimSpace(c.AdminPassword) == defaultAdminPass {
+				problems = append(problems, fmt.Errorf("PRISM_ADMIN_PASSWORD must contain at least 12 characters and not use the development default in production"))
+			}
+			if len(c.TokenSecret) < 32 || strings.TrimSpace(c.TokenSecret) == defaultTokenSecret {
+				problems = append(problems, fmt.Errorf("PRISM_TOKEN_SECRET must contain at least 32 characters and not use the development default in production"))
+			}
 		}
 	}
 

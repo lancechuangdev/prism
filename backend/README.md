@@ -113,6 +113,28 @@ Protected routes require either header:
 Authorization: Bearer <tokenId>
 ```
 
+Authentication defaults to `PRISM_AUTH_MODE=local`, where `/user/login` creates
+a Redis-backed session and `/user/logout` revokes it. Production deployments can
+use Cognito access tokens instead:
+
+```text
+PRISM_AUTH_MODE=cognito
+PRISM_COGNITO_REGION=us-west-2
+PRISM_COGNITO_USER_POOL_ID=us-west-2_example
+PRISM_COGNITO_CLIENT_ID=<app-client-id>
+PRISM_COGNITO_PROPOSAL_SCOPE=prism/proposals.write
+PRISM_COGNITO_ADMIN_SCOPE=prism/admin.read
+```
+
+In Cognito mode, the login and logout routes are not registered. The backend
+validates Cognito's RS256 signature and rotating JWKS, issuer, app client,
+`token_use=access`, expiry, and required scopes. Configure an API Gateway HTTP
+API JWT authorizer with the same issuer and audience as the outer enforcement
+layer, require `prism/proposals.write` on the proposal route, and require
+`prism/admin.read` on admin routes. The backend
+repeats token and scope validation so a network-path mistake cannot bypass the
+authorization policy.
+
 The `/api/v1` prefix uses `PRISM_API_VERSION=1`.
 
 ## Chain RPC
@@ -379,7 +401,7 @@ Redis must be running before starting the API or scheduler.
 
 ### Production configuration validation
 
-With `PRISM_ENV=production`, each executable validates its configuration before opening external connections. API and scheduler require `PRISM_STORE=mysql`, a non-empty `PRISM_MYSQL_DSN`, a deployed pool address, Redis TLS, and an HTTPS quote provider. The API also requires a multisig address, non-default admin credentials, an admin password of at least 12 characters, and a token secret of at least 32 characters. The migration executable validates only its MySQL settings because it does not use contracts, Redis, quotes, or authentication.
+With `PRISM_ENV=production`, each executable validates its configuration before opening external connections. API and scheduler require `PRISM_STORE=mysql`, a non-empty `PRISM_MYSQL_DSN`, a deployed pool address, Redis TLS, and an HTTPS quote provider. The API also requires a multisig address. Local authentication mode requires non-default admin credentials, an admin password of at least 12 characters, and a token secret of at least 32 characters; Cognito mode instead requires its region, user pool, app client, and proposal scope settings. The migration executable validates only its MySQL settings because it does not use contracts, Redis, quotes, or authentication.
 
 The API bounds client connections with a 5-second header timeout, 15-second request-read timeout, 30-second response-write timeout, 60-second idle timeout, and 1 MiB maximum request-header size. These limits also apply locally so runtime behavior matches production.
 
@@ -920,7 +942,7 @@ The backend prepares all owner-controlled pool lifecycle calls through `POST /ap
 ### TODO: Production blockers
 
 - [x] Pin versioned migrations to one MySQL connection so the advisory lock, schema changes, version records, and lock release use the same server session.
-- [ ] Add an AWS Cognito authentication mode backed by Cognito User Pools and an API Gateway HTTP API JWT authorizer. Protect proposal and admin routes with access-token scopes such as `prism/proposals.write`, disable custom login/logout in Cognito mode, and update Hardhat helpers to accept `PRISM_API_TOKEN`.
+- [x] Add an AWS Cognito authentication mode backed by Cognito User Pools and an API Gateway HTTP API JWT authorizer. Protect proposal and admin routes with access-token scopes and disable custom login/logout in Cognito mode. Hardhat helpers remain local-only and continue to use local authentication.
 - [ ] Replace mock protocol oracle and DEX dependencies with audited production integrations and validate their configured addresses.
 - [ ] Store chain-specific contract addresses and deployment metadata durably, with explicit environment and network verification.
 - [ ] Define AWS infrastructure as code for ECS/Fargate, ALB, RDS, ElastiCache, networking, security groups, IAM, DNS, TLS certificates, autoscaling, and the one-shot migration task.

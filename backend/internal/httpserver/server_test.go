@@ -625,7 +625,7 @@ func newTestServerWithDependencies(t *testing.T, poolCreator chain.PoolTransacti
 		t.Fatalf("sync fixture contract data: %v", err)
 	}
 
-	auth := auth.NewService(auth.Config{
+	localAuth := auth.NewLocalAuthenticator(auth.LocalConfig{
 		AdminUsername: "admin",
 		AdminPassword: "password",
 		TokenSecret:   "test-secret",
@@ -638,7 +638,8 @@ func newTestServerWithDependencies(t *testing.T, poolCreator chain.PoolTransacti
 		poolCreator,
 		multisigPreparer,
 		multisigReader,
-		auth,
+		localAuth,
+		auth.NewLocalAuthorizer(localAuth),
 		price.NewService(price.NewLocalQuoteProvider()),
 	)
 }

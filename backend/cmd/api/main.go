@@ -106,12 +106,22 @@ func main() {
 	}
 	defer closeCache()
 
-	authService := auth.NewService(auth.Config{
+	localAuth := auth.NewLocalAuthenticator(auth.LocalConfig{
 		AdminUsername: cfg.AdminUsername,
 		AdminPassword: cfg.AdminPassword,
 		TokenSecret:   cfg.TokenSecret,
 		TokenTTL:      cfg.TokenTTL,
 	}, auth.NewCacheSessionStore(cacheStore))
+	var authorizer auth.Authorizer = auth.NewLocalAuthorizer(localAuth)
+	if cfg.AuthMode == "cognito" {
+		authorizer, err = auth.NewCognitoAuthorizer(auth.CognitoConfig{
+			Region: cfg.CognitoRegion, UserPoolID: cfg.CognitoUserPoolID, ClientID: cfg.CognitoClientID,
+		})
+		if err != nil {
+			logger.Error("configure Cognito authentication failed", slog.Any("error", err))
+			os.Exit(1)
+		}
+	}
 
 	chainQueryService := chain.NewQueryService(repo)
 	upstreamPriceProvider, err := price.NewConfiguredQuoteProvider(
@@ -123,7 +133,7 @@ func main() {
 	}
 	priceProvider := price.NewCachedQuoteProvider(upstreamPriceProvider, cacheStore, cfg.PriceCacheTTL)
 	priceService := price.NewService(priceProvider)
-	server := httpserver.New(cfg, logger, chainQueryService, poolTransactions, multisigTransactions, multisigReader, authService, priceService)
+	server := httpserver.New(cfg, logger, chainQueryService, poolTransactions, multisigTransactions, multisigReader, localAuth, authorizer, priceService)
 
 	go func() {
 		logger.Info("api server starting", slog.String("addr", server.Addr))

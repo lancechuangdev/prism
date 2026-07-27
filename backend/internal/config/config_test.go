@@ -49,6 +49,23 @@ func TestValidateProductionAPI(t *testing.T) {
 	}
 }
 
+func TestValidateProductionCognitoAPI(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.AuthMode = "cognito"
+	cfg.AdminUsername = defaultAdminUser
+	cfg.AdminPassword = defaultAdminPass
+	cfg.TokenSecret = defaultTokenSecret
+	cfg.CognitoRegion = "us-west-2"
+	cfg.CognitoUserPoolID = "us-west-2_example"
+	cfg.CognitoClientID = "client-id"
+	cfg.ProposalWriteScope = "prism/proposals.write"
+	cfg.AdminReadScope = "prism/admin.read"
+
+	if err := cfg.Validate(ComponentAPI); err != nil {
+		t.Fatalf("valid Cognito production API configuration: %v", err)
+	}
+}
+
 func TestValidateProductionAPIRejectsUnsafeDefaults(t *testing.T) {
 	cfg := Load()
 	cfg.Env = "production"

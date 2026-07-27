@@ -9,8 +9,8 @@ import (
 
 func TestSessionIsSharedAcrossServiceInstances(t *testing.T) {
 	store := NewMemorySessionStore()
-	first := newTestService(store)
-	second := newTestService(store)
+	first := newTestLocalAuthenticator(store)
+	second := newTestLocalAuthenticator(store)
 
 	token, err := first.Login(context.Background(), "admin", "password")
 	if err != nil {
@@ -27,8 +27,8 @@ func TestSessionIsSharedAcrossServiceInstances(t *testing.T) {
 
 func TestLogoutInvalidatesSharedSession(t *testing.T) {
 	store := NewMemorySessionStore()
-	first := newTestService(store)
-	second := newTestService(store)
+	first := newTestLocalAuthenticator(store)
+	second := newTestLocalAuthenticator(store)
 
 	token, err := first.Login(context.Background(), "admin", "password")
 	if err != nil {
@@ -43,14 +43,14 @@ func TestLogoutInvalidatesSharedSession(t *testing.T) {
 }
 
 func TestLoginRejectsInvalidCredentialsWithoutCreatingSession(t *testing.T) {
-	service := newTestService(NewMemorySessionStore())
+	service := newTestLocalAuthenticator(NewMemorySessionStore())
 	if _, err := service.Login(context.Background(), "admin", "wrong"); !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("expected invalid credentials, got %v", err)
 	}
 }
 
-func newTestService(store SessionStore) *Service {
-	return NewService(Config{
+func newTestLocalAuthenticator(store SessionStore) *LocalAuthenticator {
+	return NewLocalAuthenticator(LocalConfig{
 		AdminUsername: "admin",
 		AdminPassword: "password",
 		TokenSecret:   "test-secret",
