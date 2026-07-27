@@ -917,6 +917,16 @@ When PRISM_STORE=mysql is selected, API and scheduler can share indexed state th
 
 The backend prepares all owner-controlled pool lifecycle calls through `POST /api/v1/multisig/proposals`: `create_pool`, `settle_pool`, `repay_pool`, and `liquidate_pool`. Each operation validates its parameters, encodes the corresponding `PrismPool` call, and wraps that calldata in the existing prepare–approve–execute multisig workflow.
 
-### TODO: AWS Cognito authentication mode
+### TODO: Production blockers
 
-Add a production authentication mode backed by AWS Cognito User Pools and an API Gateway HTTP API JWT authorizer. Protect proposal and admin routes with access-token scopes such as `prism/proposals.write`, disable the custom login/logout endpoints in Cognito mode, and retain the current Redis-backed authentication only for local development. Update the Hardhat helpers to accept a Cognito access token through `PRISM_API_TOKEN`.
+- [x] Pin versioned migrations to one MySQL connection so the advisory lock, schema changes, version records, and lock release use the same server session.
+- [ ] Add an AWS Cognito authentication mode backed by Cognito User Pools and an API Gateway HTTP API JWT authorizer. Protect proposal and admin routes with access-token scopes such as `prism/proposals.write`, disable custom login/logout in Cognito mode, and update Hardhat helpers to accept `PRISM_API_TOKEN`.
+- [ ] Replace mock protocol oracle and DEX dependencies with audited production integrations and validate their configured addresses.
+- [ ] Store chain-specific contract addresses and deployment metadata durably, with explicit environment and network verification.
+- [ ] Define AWS infrastructure as code for ECS/Fargate, ALB, RDS, ElastiCache, networking, security groups, IAM, DNS, TLS certificates, autoscaling, and the one-shot migration task.
+- [ ] Load database, Redis, quote-provider, and temporary authentication secrets from AWS Secrets Manager or Parameter Store.
+- [ ] Add a readiness endpoint that checks required MySQL, Redis, and chain RPC dependencies before the load balancer sends traffic.
+- [ ] Coordinate scheduler replicas with leader election or a distributed lock, or enforce exactly one scheduler task.
+- [ ] Limit JSON request-body sizes and rate-limit login and proposal requests at API Gateway, AWS WAF, or the application.
+- [ ] Add explicit deadlines, retry policies, and backoff for chain RPC, quote-provider, MySQL, and Redis operations.
+- [ ] Add production metrics, request correlation IDs, structured error fields, CloudWatch alarms, scheduler-lag monitoring, and alerts for migration or provider failures.

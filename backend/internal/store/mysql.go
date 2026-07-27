@@ -47,28 +47,42 @@ func (s *MySQLStore) Migrate(ctx context.Context) error {
 	if err := validateMySQLMigrations(); err != nil {
 		return err
 	}
-	if _, err := s.db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version BIGINT PRIMARY KEY,
-			applied_at DATETIME NOT NULL
-		)`); err != nil {
-		return fmt.Errorf("create schema migrations table: %w", err)
+
+	// MySQL advisory locks belong to a server session, not to a connection
+	// pool. Pin one connection so acquisition, migration work, and release all
+	// happen in the same session.
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("reserve migration connection: %w", err)
 	}
+	defer conn.Close()
+
 	var lockAcquired int
-	if err := s.db.QueryRowContext(ctx, `SELECT GET_LOCK('prism_schema_migrations', 30)`).Scan(&lockAcquired); err != nil {
+	if err := conn.QueryRowContext(ctx, `SELECT GET_LOCK('prism_schema_migrations', 30)`).Scan(&lockAcquired); err != nil {
 		return fmt.Errorf("acquire migration lock: %w", err)
 	}
 	if lockAcquired != 1 {
 		return fmt.Errorf("acquire migration lock: timed out")
 	}
 	defer func() {
-		_, _ = s.db.ExecContext(context.Background(), `SELECT RELEASE_LOCK('prism_schema_migrations')`)
+		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var released sql.NullInt64
+		_ = conn.QueryRowContext(releaseCtx, `SELECT RELEASE_LOCK('prism_schema_migrations')`).Scan(&released)
 	}()
+
+	if _, err := conn.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version BIGINT PRIMARY KEY,
+			applied_at DATETIME NOT NULL
+		)`); err != nil {
+		return fmt.Errorf("create schema migrations table: %w", err)
+	}
 
 	for _, migration := range mysqlMigrations {
 		var exists bool
 
-		err := s.db.QueryRowContext(
+		err := conn.QueryRowContext(
 			ctx,
 			`SELECT EXISTS(
 				SELECT 1
@@ -84,11 +98,11 @@ func (s *MySQLStore) Migrate(ctx context.Context) error {
 			continue
 		}
 		for _, statement := range migration.statements {
-			if _, err := s.db.ExecContext(ctx, statement); err != nil {
+			if _, err := conn.ExecContext(ctx, statement); err != nil {
 				return fmt.Errorf("apply migration %d: %w", migration.version, err)
 			}
 		}
-		if _, err := s.db.ExecContext(
+		if _, err := conn.ExecContext(
 			ctx,
 			`INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)`,
 			migration.version,
