@@ -95,19 +95,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	authService := auth.NewService(auth.Config{
-		AdminUsername: cfg.AdminUsername,
-		AdminPassword: cfg.AdminPassword,
-		TokenSecret:   cfg.TokenSecret,
-		TokenTTL:      cfg.TokenTTL,
-	})
-
 	cacheStore, closeCache, err := openCache(context.Background(), cfg)
 	if err != nil {
 		logger.Error("open cache failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 	defer closeCache()
+
+	authService := auth.NewService(auth.Config{
+		AdminUsername: cfg.AdminUsername,
+		AdminPassword: cfg.AdminPassword,
+		TokenSecret:   cfg.TokenSecret,
+		TokenTTL:      cfg.TokenTTL,
+	}, auth.NewCacheSessionStore(cacheStore))
 
 	chainQueryService := chain.NewQueryService(repo)
 	priceProvider := price.NewCachedProvider(price.NewDemoProvider(), cacheStore, cfg.PriceCacheTTL)

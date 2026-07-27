@@ -610,7 +610,7 @@ func newTestServerWithDependencies(t *testing.T, poolCreator chain.PoolTransacti
 		AdminPassword: "password",
 		TokenSecret:   "test-secret",
 		TokenTTL:      time.Hour,
-	})
+	}, auth.NewMemorySessionStore())
 	return New(
 		config.Config{Env: "test", Port: "0", APIVersion: "1"},
 		slog.New(slog.NewTextHandler(io.Discard, nil)),

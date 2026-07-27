@@ -200,9 +200,14 @@ func New(cfg config.Config,
 			return
 		}
 
-		token, err := authService.Login(req.Name, req.Password)
+		token, err := authService.Login(r.Context(), req.Name, req.Password)
 		if err != nil {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid username or password"})
+			if errors.Is(err, auth.ErrInvalidCredentials) {
+				writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid username or password"})
+			} else {
+				logger.Error("create login session failed", slog.Any("error", err))
+				writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "login failed"})
+			}
 			return
 		}
 
@@ -211,7 +216,11 @@ func New(cfg config.Config,
 
 	mux.Handle("POST "+apiPrefix+"/user/logout", requireAuth(authService, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := tokenFromRequest(r)
-		authService.Logout(token)
+		if err := authService.Logout(r.Context(), token); err != nil {
+			logger.Error("delete login session failed", slog.Any("error", err))
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "logout failed"})
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})))
 
@@ -465,7 +474,7 @@ func requireChainID(w http.ResponseWriter, r *http.Request) (string, bool) {
 func requireAuth(authService *auth.Service, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := tokenFromRequest(r)
-		username, err := authService.Authenticate(token)
+		username, err := authService.Authenticate(r.Context(), token)
 		if err != nil {
 			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid token"})
 			return

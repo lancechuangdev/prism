@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -9,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -31,13 +31,7 @@ type Service struct {
 	tokenSecret   []byte
 	tokenTTL      time.Duration
 	now           func() time.Time
-	mu            sync.RWMutex
-	sessions      map[string]session
-}
-
-type session struct {
-	Username  string
-	ExpiresAt time.Time
+	sessions      SessionStore
 }
 
 type tokenPayload struct {
@@ -46,18 +40,18 @@ type tokenPayload struct {
 	Nonce     string `json:"nonce"`
 }
 
-func NewService(cfg Config) *Service {
+func NewService(cfg Config, sessions SessionStore) *Service {
 	return &Service{
 		adminUsername: cfg.AdminUsername,
 		adminPassword: cfg.AdminPassword,
 		tokenSecret:   []byte(cfg.TokenSecret),
 		tokenTTL:      cfg.TokenTTL,
 		now:           time.Now,
-		sessions:      make(map[string]session),
+		sessions:      sessions,
 	}
 }
 
-func (s *Service) Login(username string, password string) (string, error) {
+func (s *Service) Login(ctx context.Context, username string, password string) (string, error) {
 	if username != s.adminUsername || password != s.adminPassword {
 		return "", ErrInvalidCredentials
 	}
@@ -74,29 +68,21 @@ func (s *Service) Login(username string, password string) (string, error) {
 		return "", err
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.sessions[token] = session{
-		Username:  username,
-		ExpiresAt: expiresAt,
+	if err := s.sessions.Set(ctx, sessionKey(token), username, s.tokenTTL); err != nil {
+		return "", fmt.Errorf("store session: %w", err)
 	}
-
 	return token, nil
 }
 
-func (s *Service) Logout(rawToken string) {
+func (s *Service) Logout(ctx context.Context, rawToken string) error {
 	token := strings.TrimSpace(rawToken)
 	if token == "" {
-		return
+		return nil
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	delete(s.sessions, token)
+	return s.sessions.Delete(ctx, sessionKey(token))
 }
 
-func (s *Service) Authenticate(rawToken string) (string, error) {
+func (s *Service) Authenticate(ctx context.Context, rawToken string) (string, error) {
 	token := strings.TrimSpace(rawToken)
 	if token == "" {
 		return "", ErrInvalidToken
@@ -112,15 +98,22 @@ func (s *Service) Authenticate(rawToken string) (string, error) {
 		return "", ErrInvalidToken
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	active, ok := s.sessions[token]
-	if !ok || active.Username != payload.Username || !active.ExpiresAt.After(now) {
+	username, err := s.sessions.Get(ctx, sessionKey(token))
+	if err != nil {
+		if errors.Is(err, ErrSessionNotFound) {
+			return "", ErrInvalidToken
+		}
+		return "", fmt.Errorf("load session: %w", err)
+	}
+	if username != payload.Username {
 		return "", ErrInvalidToken
 	}
+	return username, nil
+}
 
-	return payload.Username, nil
+func sessionKey(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("auth:session:%x", hash[:])
 }
 
 func randomNonce() string {

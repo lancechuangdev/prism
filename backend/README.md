@@ -10,7 +10,11 @@ Both executables require `PRISM_POOL_ADDRESS`; the API also requires `PRISM_MULT
 
 Selecting MySQL for both executables gives the API and scheduler a shared, persistent repository.
 
-Both executables use Redis to cache price quotes for the configured TTL. On a cache miss, the cached provider fetches a fresh quote from the underlying price provider.
+Both executables use Redis to cache price quotes for the configured TTL. The
+API also stores active login sessions in Redis, so authentication and logout
+remain consistent across restarts and multiple API replicas. On a price-cache
+miss, the cached provider fetches a fresh quote from the underlying price
+provider.
 
 Docker Compose runs the API, scheduler, MySQL, and Redis as separate containers on a shared network.
 
@@ -622,19 +626,19 @@ go test ./...
 
 - Add config-driven admin credentials.
 - Issue signed tokens after login.
-- Track active sessions in memory so logout can revoke a token.
+- Track active sessions so logout can revoke a token.
 - Protect admin routes with auth middleware.
 
-Important for this checkpoint:
-
-```text
-Sessions are still in memory. Redis will be added later to store login state
-so logout survives across API processes.
-```
+This step originally tracked sessions in process memory. The current API stores
+hashed session keys in Redis with the configured token TTL, so login state and
+logout are shared by all API replicas. Unit tests use `MemorySessionStore` as a
+deterministic fixture.
 
 Files:
 
 - `internal/auth/service.go`
+- `internal/auth/session_store.go`
+- `internal/auth/cache_session_store.go`
 - `internal/auth/service_test.go`
 - `internal/httpserver/server.go`
 - `internal/httpserver/server_test.go`

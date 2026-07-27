@@ -4,7 +4,7 @@ Prism is a fixed-rate lending protocol with an accompanying indexing and API
 backend. The repository contains two projects:
 
 - [`protocol`](./protocol) contains the Solidity contracts, Hardhat configuration, and contract tests.
-- [`backend`](./backend) contains the Go API and scheduler, plus MySQL and Redis infrastructure for indexed data and price caching.
+- [`backend`](./backend) contains the Go API and scheduler, plus MySQL and Redis infrastructure for indexed data, shared authentication sessions, and price caching.
 
 ## Current integration status
 
@@ -37,8 +37,9 @@ flowchart LR
     Scheduler[Scheduler] --> Sync
     Services --> Repository[Repository interface]
     Sync --> Repository
-    Services --> APICachedPrice[API cached price provider adapter]
-    Scheduler --> SchedulerCachedPrice[Scheduler cached price provider adapter]
+  Services --> APICachedPrice[API cached price provider adapter]
+  Services -->|shared login sessions| Redis
+  Scheduler --> SchedulerCachedPrice[Scheduler cached price provider adapter]
   end
 
   Repository --> MySQL[(MySQL)]
@@ -106,7 +107,9 @@ The backend is a Go module with two executables:
 - `cmd/api` performs an initial pool sync, serves public and protected HTTP endpoints, and shuts down gracefully on `SIGINT` or `SIGTERM`.
 - `cmd/scheduler` performs an initial sync and repeats it according to `PRISM_SYNC_INTERVAL`.
 
-Both processes can use an in-memory repository or MySQL. They use Redis for price caching and currently fetch cache misses from the demo price provider.
+Both processes can use an in-memory repository or MySQL. They use Redis for
+price caching, and the API uses Redis for shared login sessions. Price cache
+misses currently come from the demo price provider.
 When both processes use MySQL, the scheduler's indexed snapshots are visible to the API.
 
 The backend also contains:
