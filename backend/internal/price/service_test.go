@@ -7,7 +7,7 @@ import (
 )
 
 func TestLatestNormalizesSymbol(t *testing.T) {
-	provider := NewDemoProvider()
+	provider := NewLocalQuoteProvider()
 	expectedTime := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
 	provider.now = func() time.Time { return expectedTime }
 
@@ -22,7 +22,7 @@ func TestLatestNormalizesSymbol(t *testing.T) {
 		t.Fatalf("expected normalized symbol PRM, got %s", quote.Symbol)
 	}
 	if quote.Price != "0.0027" {
-		t.Fatalf("expected demo price, got %s", quote.Price)
+		t.Fatalf("expected local price, got %s", quote.Price)
 	}
 	if quote.UpdatedAt != expectedTime {
 		t.Fatalf("expected updated time %s, got %s", expectedTime, quote.UpdatedAt)
@@ -30,7 +30,7 @@ func TestLatestNormalizesSymbol(t *testing.T) {
 }
 
 func TestLatestRejectsBlankSymbol(t *testing.T) {
-	service := NewService(NewDemoProvider())
+	service := NewService(NewLocalQuoteProvider())
 
 	_, err := service.Latest(context.Background(), " ")
 	if err == nil {

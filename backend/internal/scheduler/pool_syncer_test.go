@@ -15,7 +15,7 @@ func TestPoolSyncerRunOnce(t *testing.T) {
 	ctx := context.Background()
 	repo := store.NewMemoryStore()
 	reader := chain.NewFakeReader()
-	prices := price.NewService(price.NewDemoProvider())
+	prices := price.NewService(price.NewLocalQuoteProvider())
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	syncer := NewPoolSyncer(reader, repo, "31337", prices, "PRM", logger)
 

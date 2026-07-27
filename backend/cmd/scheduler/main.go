@@ -45,7 +45,14 @@ func main() {
 	}
 	defer reader.Close()
 
-	priceProvider := price.NewCachedProvider(price.NewDemoProvider(), cacheStore, cfg.PriceCacheTTL)
+	upstreamPriceProvider, err := price.NewConfiguredQuoteProvider(
+		cfg.Env, cfg.PriceProvider, cfg.PriceProviderURL, cfg.PriceProviderToken,
+	)
+	if err != nil {
+		logger.Error("configure price provider failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	priceProvider := price.NewCachedQuoteProvider(upstreamPriceProvider, cacheStore, cfg.PriceCacheTTL)
 	priceService := price.NewService(priceProvider)
 	syncer := scheduler.NewPoolSyncer(reader, repo, cfg.ChainID, priceService, cfg.PriceSymbol, logger)
 

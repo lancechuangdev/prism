@@ -40,7 +40,7 @@ flowchart LR
 
     subgraph APIData[Data-access layer]
       APIRepo[Repository interface]
-      APICachedProvider[Cached price provider]
+      APICachedQuoteProvider[Cached quote provider]
     end
 
     Routes -->|login and logout| Auth
@@ -50,22 +50,22 @@ flowchart LR
     Routes --> PriceService
     ChainService -->|pool and token queries| APIRepo
     MultiSig --> APIRepo
-    PriceService --> APICachedProvider
+    PriceService --> APICachedQuoteProvider
     RPCChainA[RPC chain reader] -->|startup sync| APIRepo
   end
 
   subgraph SchedulerProcess[Scheduler process]
     Scheduler[Scheduler worker] -->|periodic sync| SchedulerRepo[Repository interface]
     RPCChainS[RPC chain reader] --> Scheduler
-    Scheduler --> SchedulerCachedProvider[Cached price provider]
+    Scheduler --> SchedulerCachedQuoteProvider[Cached quote provider]
   end
 
-  APICachedProvider --> OracleAdapter[Oracle adapter]
-  SchedulerCachedProvider --> OracleAdapter[Oracle adapter]
+  APICachedQuoteProvider --> QuoteProvider[Configured quote provider]
+  SchedulerCachedQuoteProvider --> QuoteProvider
   APIRepo --> MySQL
   SchedulerRepo --> MySQL
-  APICachedProvider <--> Redis
-  SchedulerCachedProvider <--> Redis
+  APICachedQuoteProvider <--> Redis
+  SchedulerCachedQuoteProvider <--> Redis
 ```
 
 ## API Endpoints
@@ -297,7 +297,7 @@ The response reports the current owners, each owner's approval, approval count, 
 
 ## Cache
 
-The API and scheduler use Redis to cache price quotes under keys such as `price:PRM`. On a cache miss, they fetch the quote from the underlying provider and store it for `PRISM_PRICE_CACHE_TTL`.
+The API and scheduler use Redis to cache price quotes under keys such as `price:PRM`. On a cache miss, they fetch the quote from the configured provider and store it for `PRISM_PRICE_CACHE_TTL`. Local development defaults to `PRISM_PRICE_PROVIDER=local`; production refuses to start with the local provider.
 
 Redis config:
 
@@ -306,7 +306,31 @@ PRISM_REDIS_ADDR=127.0.0.1:6379
 PRISM_REDIS_PASSWORD=
 PRISM_REDIS_DB=0
 PRISM_PRICE_CACHE_TTL=30s
+PRISM_PRICE_PROVIDER=local
 ```
+
+For production, configure an HTTPS endpoint:
+
+```text
+PRISM_ENV=production
+PRISM_PRICE_PROVIDER=http
+PRISM_PRICE_PROVIDER_URL=https://prices.example.com/v1/quote
+PRISM_PRICE_PROVIDER_TOKEN=<secret bearer token>
+```
+
+The backend sends `GET <url>?symbol=PRM` with the optional provider token in the `Authorization: Bearer` header. The provider response must be:
+
+```json
+{
+  "symbol": "PRM",
+  "currency": "USD",
+  "price": "0.0027",
+  "source": "production-provider",
+  "updatedAt": "2026-07-26T12:00:00Z"
+}
+```
+
+The price must be a positive decimal string. Production provider URLs must use HTTPS.
 
 Run either process with Redis cache:
 
@@ -692,14 +716,14 @@ go test ./...
 ## Step 7: Price service
 
 - Add a dedicated price service instead of mixing price logic into HTTP routes.
-- Keep the price provider behind an interface so a future oracle provider can replace the demo provider.
+- Keep the price provider behind an interface so a production provider can replace the local provider.
 - Expose `GET /api/v1/price?symbol=PRISM` for a simple latest-price read.
 - Let the scheduler refresh/log the configured price symbol on each sync cycle.
 
 Files:
 
 - `internal/price/service.go`
-- `internal/price/demo_provider.go`
+- `internal/price/local_quote_provider.go`
 - `internal/price/service_test.go`
 - `internal/httpserver/server.go`
 - `internal/httpserver/server_test.go`
@@ -855,3 +879,7 @@ When PRISM_STORE=mysql is selected, API and scheduler can share indexed state th
 ### Pool lifecycle proposals
 
 The backend prepares all owner-controlled pool lifecycle calls through `POST /api/v1/multisig/proposals`: `create_pool`, `settle_pool`, `repay_pool`, and `liquidate_pool`. Each operation validates its parameters, encodes the corresponding `PrismPool` call, and wraps that calldata in the existing prepare–approve–execute multisig workflow.
+
+### TODO: AWS Cognito authentication mode
+
+Add a production authentication mode backed by AWS Cognito User Pools and an API Gateway HTTP API JWT authorizer. Protect proposal and admin routes with access-token scopes such as `prism/proposals.write`, disable the custom login/logout endpoints in Cognito mode, and retain the current Redis-backed authentication only for local development. Update the Hardhat helpers to accept a Cognito access token through `PRISM_API_TOKEN`.

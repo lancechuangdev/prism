@@ -13,8 +13,8 @@ The protocol and backend are connected through Ethereum RPC at runtime.
 - The contracts implement and test the lending lifecycle on Hardhat networks.
 - A local deployment script deploys the protocol, configures its mock dependencies, and creates one seed pool on a persistent Hardhat node.
 - The backend has an RPC implementation of `chain.Reader` backed by generated Go bindings. It reads `poolCount`, pool snapshots, pool data, and ERC-20 `symbol` and `decimals`.
-- Both backend executables instantiate `RPCReader` from the configured RPC URL and deployed `PrismPool` address. `DemoReader` is used only by tests.
-- Backend prices currently come from `DemoProvider`, wrapped by a Redis-backed cache.
+- Both backend executables instantiate `RPCReader` from the configured RPC URL and deployed `PrismPool` address. `FakeReader` is used only by tests.
+- Local backend prices come from `LocalQuoteProvider`, wrapped by a Redis-backed `CachedQuoteProvider`.
 
 Production use still requires durable deployment addresses and real oracle, DEX, and provider adapters.
 
@@ -109,7 +109,7 @@ The backend is a Go module with two executables:
 
 Both processes can use an in-memory repository or MySQL. They use Redis for
 price caching, and the API uses Redis for shared login sessions. Price cache
-misses currently come from the demo price provider.
+misses in local development come from the local price provider.
 When both processes use MySQL, the scheduler's indexed snapshots are visible to the API.
 
 The backend also contains:
@@ -463,6 +463,9 @@ Do not use the Compose credentials or token secret in a public environment.
 | `PRISM_REDIS_PASSWORD` | empty | Redis password. |
 | `PRISM_REDIS_DB` | `0` | Redis database number. |
 | `PRISM_PRICE_SYMBOL` | `PRM` | Symbol refreshed by the scheduler. |
+| `PRISM_PRICE_PROVIDER` | `local` | Price adapter: `local` for development or `http`; production rejects `local`. |
+| `PRISM_PRICE_PROVIDER_URL` | empty | HTTPS quote endpoint used by the `http` provider. |
+| `PRISM_PRICE_PROVIDER_TOKEN` | empty | Optional bearer token for the HTTP quote provider. |
 | `PRISM_PRICE_CACHE_TTL` | `30s` | Price-cache lifetime. |
 | `PRISM_ADMIN_USERNAME` | `admin` | Development admin username. |
 | `PRISM_ADMIN_PASSWORD` | `password` | Development admin password. |

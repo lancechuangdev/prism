@@ -9,14 +9,14 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/cache"
 )
 
-func TestCachedProviderUsesCache(t *testing.T) {
+func TestCachedQuoteProviderUsesCache(t *testing.T) {
 	ctx := context.Background()
 	cacheStore := newFakeCache()
-	provider := NewDemoProvider()
+	provider := NewLocalQuoteProvider()
 	start := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
 	provider.now = func() time.Time { return start }
 
-	cached := NewCachedProvider(provider, cacheStore, time.Minute)
+	cached := NewCachedQuoteProvider(provider, cacheStore, time.Minute)
 
 	first, err := cached.Latest(ctx, "PRM")
 	if err != nil {
@@ -27,7 +27,7 @@ func TestCachedProviderUsesCache(t *testing.T) {
 		Symbol:   "PRM",
 		Currency: "USDT",
 		Price:    "100",
-		Source:   "demo",
+		Source:   "local",
 	}
 
 	second, err := cached.Latest(ctx, "PRM")
@@ -40,15 +40,15 @@ func TestCachedProviderUsesCache(t *testing.T) {
 	}
 }
 
-func TestCachedProviderFetchesNewValueAfterTTL(t *testing.T) {
+func TestCachedQuoteProviderFetchesNewValueAfterTTL(t *testing.T) {
 	ctx := context.Background()
 	cacheStore := newFakeCache()
-	provider := NewDemoProvider()
+	provider := NewLocalQuoteProvider()
 	start := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
 	cacheStore.now = func() time.Time { return start }
 	provider.now = func() time.Time { return start }
 
-	cached := NewCachedProvider(provider, cacheStore, time.Minute)
+	cached := NewCachedQuoteProvider(provider, cacheStore, time.Minute)
 
 	first, err := cached.Latest(ctx, "PRM")
 	if err != nil {
@@ -59,7 +59,7 @@ func TestCachedProviderFetchesNewValueAfterTTL(t *testing.T) {
 		Symbol:   "PRM",
 		Currency: "USDT",
 		Price:    "100",
-		Source:   "demo",
+		Source:   "local",
 	}
 	cacheStore.now = func() time.Time { return start.Add(time.Minute) }
 	provider.now = func() time.Time { return start.Add(time.Minute) }

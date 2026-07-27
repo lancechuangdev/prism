@@ -7,26 +7,26 @@ import (
 	"time"
 )
 
-type DemoProvider struct {
+type LocalQuoteProvider struct {
 	quotes map[string]Quote
 	now    func() time.Time
 }
 
-func NewDemoProvider() *DemoProvider {
-	return &DemoProvider{
+func NewLocalQuoteProvider() *LocalQuoteProvider {
+	return &LocalQuoteProvider{
 		quotes: map[string]Quote{
 			"PRM": {
 				Symbol:   "PRM",
 				Currency: "USDT",
 				Price:    "0.0027",
-				Source:   "demo",
+				Source:   "local",
 			},
 		},
 		now: time.Now,
 	}
 }
 
-func (p *DemoProvider) Latest(_ context.Context, symbol string) (Quote, error) {
+func (p *LocalQuoteProvider) Latest(_ context.Context, symbol string) (Quote, error) {
 	quote, ok := p.quotes[strings.ToUpper(symbol)]
 	if !ok {
 		return Quote{}, fmt.Errorf("price for %s not found", symbol)

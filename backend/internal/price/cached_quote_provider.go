@@ -9,21 +9,21 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/cache"
 )
 
-type CachedProvider struct {
-	next  Provider
+type CachedQuoteProvider struct {
+	next  QuoteProvider
 	cache cache.Cache
 	ttl   time.Duration
 }
 
-func NewCachedProvider(next Provider, cache cache.Cache, ttl time.Duration) *CachedProvider {
-	return &CachedProvider{
+func NewCachedQuoteProvider(next QuoteProvider, cache cache.Cache, ttl time.Duration) *CachedQuoteProvider {
+	return &CachedQuoteProvider{
 		next:  next,
 		cache: cache,
 		ttl:   ttl,
 	}
 }
 
-func (p *CachedProvider) Latest(ctx context.Context, symbol string) (Quote, error) {
+func (p *CachedQuoteProvider) Latest(ctx context.Context, symbol string) (Quote, error) {
 	key := "price:" + symbol
 	cachedValue, err := p.cache.Get(ctx, key)
 	if err == nil {

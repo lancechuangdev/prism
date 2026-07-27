@@ -602,7 +602,7 @@ func newTestServerWithDependencies(t *testing.T, poolCreator chain.PoolTransacti
 
 	repo := store.NewMemoryStore()
 	if err := chain.SyncPools(context.Background(), chain.NewFakeReader(), repo, "31337"); err != nil {
-		t.Fatalf("sync demo contract data: %v", err)
+		t.Fatalf("sync fixture contract data: %v", err)
 	}
 
 	auth := auth.NewService(auth.Config{
@@ -619,7 +619,7 @@ func newTestServerWithDependencies(t *testing.T, poolCreator chain.PoolTransacti
 		multisigPreparer,
 		multisigReader,
 		auth,
-		price.NewService(price.NewDemoProvider()),
+		price.NewService(price.NewLocalQuoteProvider()),
 	)
 }
 

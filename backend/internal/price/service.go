@@ -15,15 +15,15 @@ type Quote struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-type Provider interface {
+type QuoteProvider interface {
 	Latest(ctx context.Context, symbol string) (Quote, error)
 }
 
 type Service struct {
-	provider Provider
+	provider QuoteProvider
 }
 
-func NewService(provider Provider) *Service {
+func NewService(provider QuoteProvider) *Service {
 	return &Service{provider: provider}
 }
 
