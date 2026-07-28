@@ -21,6 +21,15 @@ coverage/
 .gas-snapshot
 snapshots/
 
+# Terraform local state, plans, and variable values
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+backend.hcl
+crash.log
+
 # Local operating-system files
 .DS_Store
 Thumbs.db

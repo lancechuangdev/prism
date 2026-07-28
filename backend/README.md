@@ -945,8 +945,8 @@ The backend prepares all owner-controlled pool lifecycle calls through `POST /ap
 - [x] Add an AWS Cognito authentication mode backed by Cognito User Pools and an API Gateway HTTP API JWT authorizer. Protect proposal and admin routes with access-token scopes and disable custom login/logout in Cognito mode. Hardhat helpers remain local-only and continue to use local authentication.
 - [x] Replace mock protocol oracle and DEX dependencies with Chainlink Data Feed and Uniswap V3 production adapters, while retaining mocks for local development, and validate the Sepolia network and configured contract addresses during deployment.
 - [x] Store chain-specific contract addresses and deployment metadata in versioned deployment manifests, with explicit environment and network verification; archive production manifests as deployment artifacts.
-- [ ] Define AWS infrastructure as code for ECS/Fargate, ALB, RDS, ElastiCache, networking, security groups, IAM, DNS, TLS certificates, autoscaling, and the one-shot migration task.
-- [ ] Load database, Redis, quote-provider, and temporary authentication secrets from AWS Secrets Manager or Parameter Store.
+- [x] Define AWS infrastructure as code for ECS/Fargate, ALB, RDS, ElastiCache, networking, security groups, IAM, DNS, TLS certificates, autoscaling, and the one-shot migration task. See `../infra/terraform`.
+- [ ] Move database, Redis, quote-provider, RPC, and temporary authentication secrets out of `terraform.tfvars` and ECS task-definition environment variables into AWS Secrets Manager or Parameter Store. The real `terraform.tfvars` is ignored by Git because it currently contains sensitive values; do not commit it.
 - [ ] Add a readiness endpoint that checks required MySQL, Redis, and chain RPC dependencies before the load balancer sends traffic.
 - [ ] Coordinate scheduler replicas with leader election or a distributed lock, or enforce exactly one scheduler task.
 - [ ] Limit JSON request-body sizes and rate-limit login and proposal requests at API Gateway, AWS WAF, or the application.
