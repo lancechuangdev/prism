@@ -83,6 +83,43 @@ The command prints a JSON object containing the values needed by an RPC client a
 
 Contract addresses belong to the running local node. Restarting `npm run node` resets its chain state, so run `npm run deploy:local` again and use the newly generated addresses. The local deployment file is ignored by Git because its addresses are only valid for that running node.
 
+## Sepolia production-integration deployment
+
+`ChainlinkOracle` reads token/USD Chainlink Data Feeds, rejects incomplete,
+non-positive, future-dated, and stale rounds, and normalizes feed answers to
+the pool's 1e18 price scale. `UniswapV3SwapAdapter` uses configured direct-pool
+fee tiers for exact-input and exact-output swaps through Uniswap V3
+SwapRouter02 and QuoterV2. The adapter verifies that the router and quoter use
+the same deployed V3 factory.
+
+The Sepolia deployment requires explicit addresses rather than embedding
+addresses that may change. Obtain current feed and periphery addresses from
+the official Chainlink and Uniswap deployment directories, then run:
+
+```bash
+SEPOLIA_RPC_URL=https://... \
+SEPOLIA_PRIVATE_KEY=... \
+PRISM_MULTISIG_ADDRESS=0x... \
+PRISM_FEE_ADDRESS=0x... \
+PRISM_UNISWAP_V3_ROUTER=0x... \
+PRISM_UNISWAP_V3_QUOTER=0x... \
+PRISM_CHAINLINK_FEEDS='[
+  {"token":"0x...","feed":"0x...","maxStaleness":3600},
+  {"token":"0x...","feed":"0x...","maxStaleness":3600}
+]' \
+PRISM_UNISWAP_V3_POOLS='[
+  {"tokenIn":"0x...","tokenOut":"0x...","fee":3000}
+]' \
+npm run deploy:sepolia
+```
+
+The script refuses non-Sepolia RPC networks, checks that every configured
+contract address has bytecode, confirms each feed currently returns an
+acceptable price, transfers oracle and adapter ownership to the multisig, and
+deploys `PrismPool` with the production adapters. Configure every swap
+direction used by repayment or liquidation. This is a testnet integration
+path, not a claim that Prism's own contracts have received a security audit.
+
 To pass the generated contract addresses to the Docker backend:
 
 ```bash
@@ -279,11 +316,13 @@ Apply the same process to other contracts as needed.
 
 Before accepting real assets such as USDT, WETH, or WBTC:
 
-- normalize pool calculations for tokens with different decimals;
-- replace the global 18-decimal minimums with per-token or per-pool minimums;
-- use `SafeERC20` for non-standard ERC-20 return behavior;
+- [x] normalize pool calculations and global token-quantity minimums for tokens with different decimals;
+- replace the global normalized minimums with independently configurable per-token or per-pool minimums;
+- replace every raw `transfer`, `transferFrom`, and `approve` call in `PrismPool` with `SafeERC20`, including zero-reset-compatible approvals, before supporting arbitrary mainnet tokens;
 - correct and test the repayment-interest units;
-- replace `MockOracle` and `FixedRateSwap` with production integrations; and
+- [x] provide Chainlink Data Feed and Uniswap V3 production integrations while retaining mocks for local development;
+- replace the direct, single-pool Uniswap V3 configuration with automatic route discovery that compares available pools and fee tiers, supports multi-hop routes when appropriate, and applies explicit liquidity and price-impact limits;
+- remove on-chain QuoterV2 calls from repayment and liquidation because Uniswap quoting is gas-intensive and intended for off-chain simulation; obtain reviewable quotes during proposal preparation and execute swaps with independently enforced on-chain input/output limits;
 - add explicit wrapped-asset UX, since native ETH and BTC are not ERC-20 tokens.
 
 ## TODO: Position-token redemption warning

@@ -136,6 +136,57 @@ describe("PrismPool settle", function () {
     expect(data.settleAmountBorrow).to.equal(ethers.parseEther("1"));
   });
 
+  it("settles correctly when lend and collateral tokens use different decimals", async function () {
+    const usdc = await ethers.deployContract("MockDecimalsToken", [
+      "Mock USDC",
+      "mUSDC",
+      6,
+    ]);
+    const weth = await ethers.deployContract("MockDecimalsToken", [
+      "Mock WETH",
+      "mWETH",
+      18,
+    ]);
+    const mixedPool = await ethers.deployContract("PrismPool", [
+      owner.address,
+      await oracle.getAddress(),
+      await swap.getAddress(),
+      feeRecipient.address,
+    ]);
+    const latestBlock = await ethers.provider.getBlock("latest");
+    await mixedPool.createPool({
+      settleTime: latestBlock.timestamp + 3600,
+      maturityTime: latestBlock.timestamp + 3600 + 7 * 24 * 60 * 60,
+      interestRate: INTEREST_RATE,
+      maxLendSupply: 2_000n * 10n ** 6n,
+      collateralizationRatio: COLLATERALIZATION_RATIO,
+      lendToken: await usdc.getAddress(),
+      collateralToken: await weth.getAddress(),
+      lenderPositionToken: await lenderPositionToken.getAddress(),
+      borrowerPositionToken: await borrowerPositionToken.getAddress(),
+      liquidateRate: LIQUIDATE_RATE,
+    });
+    await oracle.setPrice(await usdc.getAddress(), ethers.parseEther("1"));
+    await oracle.setPrice(await weth.getAddress(), ethers.parseEther("2000"));
+    await usdc.mint(alice.address, 1_000n * 10n ** 6n);
+    await weth.mint(bob.address, ethers.parseEther("1"));
+    await usdc
+      .connect(alice)
+      .approve(await mixedPool.getAddress(), 1_000n * 10n ** 6n);
+    await weth
+      .connect(bob)
+      .approve(await mixedPool.getAddress(), ethers.parseEther("1"));
+    await mixedPool.connect(alice).depositLend(0, 1_000n * 10n ** 6n);
+    await mixedPool.connect(bob).depositBorrow(0, ethers.parseEther("1"));
+    await moveToSettleTime();
+
+    await mixedPool.settle(0);
+
+    const data = await mixedPool.getPoolData(0);
+    expect(data.settleAmountLend).to.equal(1_000n * 10n ** 6n);
+    expect(data.settleAmountBorrow).to.equal(ethers.parseEther("1"));
+  });
+
   it("becomes CANCELLED when either side is empty", async function () {
     await pool.createPool(await buildCreateParams());
     const poolAddress = await pool.getAddress();

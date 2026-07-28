@@ -15,8 +15,9 @@ The protocol and backend are connected through Ethereum RPC at runtime.
 - The backend has an RPC implementation of `chain.Reader` backed by generated Go bindings. It reads `poolCount`, pool snapshots, pool data, and ERC-20 `symbol` and `decimals`.
 - Both backend executables instantiate `RPCReader` from the configured RPC URL and deployed `PrismPool` address. `FakeReader` is used only by tests.
 - Local backend prices come from `LocalQuoteProvider`, wrapped by a Redis-backed `CachedQuoteProvider`.
+- Sepolia deployments can use `ChainlinkOracle` and `UniswapV3SwapAdapter`; the deployment validates the network and configured contract bytecode before transferring adapter ownership to the multisig.
 
-Production use still requires durable deployment addresses and real oracle, DEX, and provider adapters.
+Production use still requires durable deployment addresses, a real backend quote provider, and a security review of Prism's contracts and adapter configuration.
 
 ## System architecture
 
@@ -64,6 +65,8 @@ The protocol is built with Solidity 0.8.28, Hardhat 3, ethers 6, and OpenZeppeli
 | `PositionToken` | ERC-20 receipt token minted and burned by approved pool contracts. |
 | `MockOracle` | Owner-controlled token prices for local development and tests. |
 | `FixedRateSwap` | Deterministic exact-input and exact-output swaps for tests. |
+| `ChainlinkOracle` | Staleness-checked, 1e18-normalized Chainlink token/USD prices for production integrations. |
+| `UniswapV3SwapAdapter` | Fee-tier-configured exact-input and exact-output swaps through Uniswap V3. |
 | `ThresholdMultiSig` | Threshold approval and execution of administrative calls. |
 
 ### Lending lifecycle

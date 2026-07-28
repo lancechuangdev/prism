@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity ^0.8.28;
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+
 // Asset tokens for lending and borrowing, for example:
 // lendToken (stablecoins): USDT / USDC / BUSD
 // borrowToken (volatile assets): WBTC / WETH / DAI
@@ -24,9 +26,13 @@ interface IOracleLike {
     function getPrice(address token) external view returns (uint256);
 }
 
+interface IERC20MetadataLike {
+    function decimals() external view returns (uint8);
+}
+
 interface IDexSwapLike {
-    function getAmountIn(address tokenIn, address tokenOut, uint256 amountOut) external view returns (uint256);
-    function getAmountOut(address tokenIn, address tokenOut, uint256 amountIn) external view returns (uint256);
+    function getAmountIn(address tokenIn, address tokenOut, uint256 amountOut) external returns (uint256);
+    function getAmountOut(address tokenIn, address tokenOut, uint256 amountIn) external returns (uint256);
     function swapExactTokensForTokens(
         address tokenIn,
         address tokenOut,
@@ -45,7 +51,6 @@ interface IDexSwapLike {
 
 contract PrismPool {
     uint256 private constant RATE_SCALE = 1e8;
-    uint256 private constant PRICE_SCALE = 1e18; // Oracle price scale
     uint256 private constant SECONDS_PER_YEAR = 365 days; // Number of seconds in a year
 
     enum PoolState {
@@ -328,8 +333,13 @@ contract PrismPool {
         uint256 borrowPrice = IOracleLike(oracle).getPrice(pool.collateralToken);
         require(lendPrice > 0 && borrowPrice > 0, "Invalid price from oracle");
 
-        uint256 borrowToLendRatio = (borrowPrice * PRICE_SCALE) / lendPrice;
-        uint256 collateralValueInLend = (data.settleAmountBorrow * borrowToLendRatio) / PRICE_SCALE;
+        uint256 collateralValueInLend = _convertTokenAmount(
+            data.settleAmountBorrow,
+            pool.collateralToken,
+            pool.lendToken,
+            borrowPrice,
+            lendPrice
+        );
         uint256 liquidationThreshold = (data.settleAmountLend * (RATE_SCALE + pool.liquidateRate)) / RATE_SCALE;
 
         return collateralValueInLend < liquidationThreshold;
@@ -347,7 +357,7 @@ contract PrismPool {
         PoolBaseInfo storage pool = pools[poolId];
         LendInfo storage lendInfo = userLendInfo[msg.sender][poolId];
 
-        require(amount >= minLendAmount, "Amount below minimum lend amount");
+        require(_normalizedTokenAmount(pool.lendToken, amount) >= minLendAmount, "Amount below minimum lend amount");
         require(pool.totalLendDeposited + amount <= pool.maxLendSupply, "Exceeds max supply");
 
         bool success = IERC20Like(pool.lendToken).transferFrom(msg.sender, address(this), amount);
@@ -368,9 +378,12 @@ contract PrismPool {
         beforeSettle(poolId)
     {
         require(poolId < pools.length, "Invalid pool ID");
-        require(amount >= minBorrowAmount, "Amount below minimum borrow amount");
-
         PoolBaseInfo storage pool = pools[poolId];
+        require(
+            _normalizedTokenAmount(pool.collateralToken, amount) >= minBorrowAmount,
+            "Amount below minimum borrow amount"
+        );
+
         BorrowInfo storage borrowInfo = userBorrowInfo[msg.sender][poolId];
 
         bool success = IERC20Like(pool.collateralToken).transferFrom(msg.sender, address(this), amount);
@@ -400,19 +413,59 @@ contract PrismPool {
         uint256 borrowPrice = IOracleLike(oracle).getPrice(pool.collateralToken);
         require(lendPrice > 0 && borrowPrice > 0, "Invalid price from oracle");
 
-        uint256 borrowToLendRatio = (borrowPrice * PRICE_SCALE) / lendPrice;
-        uint256 collateralValueInLend = (pool.totalCollateralDeposited * borrowToLendRatio) / PRICE_SCALE;
-        uint256 maxSettleLend = (collateralValueInLend * RATE_SCALE) / pool.collateralizationRatio;
+        uint256 collateralValueInLend = _convertTokenAmount(
+            pool.totalCollateralDeposited,
+            pool.collateralToken,
+            pool.lendToken,
+            borrowPrice,
+            lendPrice
+        );
+        uint256 maxSettleLend = Math.mulDiv(collateralValueInLend, RATE_SCALE, pool.collateralizationRatio);
 
         if (pool.totalLendDeposited > maxSettleLend) {
             data.settleAmountLend = maxSettleLend;
             data.settleAmountBorrow = pool.totalCollateralDeposited;
         } else {
             data.settleAmountLend = pool.totalLendDeposited;
-            data.settleAmountBorrow = (pool.totalLendDeposited * pool.collateralizationRatio * lendPrice) / (borrowPrice * RATE_SCALE);
+            uint256 lendValueInCollateral = _convertTokenAmount(
+                pool.totalLendDeposited,
+                pool.lendToken,
+                pool.collateralToken,
+                lendPrice,
+                borrowPrice
+            );
+            data.settleAmountBorrow =
+                Math.mulDiv(lendValueInCollateral, pool.collateralizationRatio, RATE_SCALE);
         }
 
         _setPoolState(poolId, PoolState.ACTIVE);
+    }
+
+    function _convertTokenAmount(
+        uint256 amount,
+        address tokenIn,
+        address tokenOut,
+        uint256 tokenInPrice,
+        uint256 tokenOutPrice
+    ) private view returns (uint256) {
+        uint8 tokenInDecimals = IERC20MetadataLike(tokenIn).decimals();
+        uint8 tokenOutDecimals = IERC20MetadataLike(tokenOut).decimals();
+        require(tokenInDecimals <= 36 && tokenOutDecimals <= 36, "Unsupported token decimals");
+
+        uint256 valueAtPriceScale = Math.mulDiv(amount, tokenInPrice, 10 ** tokenInDecimals);
+        return Math.mulDiv(valueAtPriceScale, 10 ** tokenOutDecimals, tokenOutPrice);
+    }
+
+    function _normalizedTokenAmount(address token, uint256 amount) private view returns (uint256) {
+        uint8 decimals = IERC20MetadataLike(token).decimals();
+        require(decimals <= 36, "Unsupported token decimals");
+        if (decimals < 18) {
+            return amount * (10 ** (18 - decimals));
+        }
+        if (decimals > 18) {
+            return amount / (10 ** (decimals - 18));
+        }
+        return amount;
     }
 
     function refundExcessLend(uint256 poolId) external whenNotPaused isState(poolId, PoolState.ACTIVE) {
@@ -592,6 +645,8 @@ contract PrismPool {
         } else {
             soldAmount = data.settleAmountBorrow;
             require(soldAmount <= maxCollateralAmount, "Dex slippage too high");
+            uint256 minimumRecovered =
+                IDexSwapLike(dexSwap).getAmountOut(pool.collateralToken, pool.lendToken, soldAmount);
 
             bool approved = IERC20Like(pool.collateralToken).approve(dexSwap, soldAmount);
             require(approved, "Collateral approve failed");
@@ -600,7 +655,7 @@ contract PrismPool {
                 pool.collateralToken,
                 pool.lendToken,
                 soldAmount,
-                0,
+                minimumRecovered,
                 address(this)
             );
         }
