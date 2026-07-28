@@ -45,10 +45,9 @@ variable "chain_id" {
   type        = string
 }
 
-variable "chain_rpc_url" {
-  description = "EVM JSON-RPC URL. Move this to Secrets Manager in the next hardening step."
+variable "chain_rpc_url_secret_arn" {
+  description = "Secrets Manager ARN whose value is the EVM JSON-RPC URL."
   type        = string
-  sensitive   = true
 }
 
 variable "pool_address" {
@@ -81,11 +80,9 @@ variable "price_provider_url" {
   }
 }
 
-variable "price_provider_token" {
-  description = "Quote-provider bearer token. Move this to Secrets Manager in the next hardening step."
+variable "price_provider_token_secret_arn" {
+  description = "Secrets Manager ARN whose value is the quote-provider bearer token."
   type        = string
-  sensitive   = true
-  default     = ""
 }
 
 variable "cognito_region" {
@@ -109,24 +106,13 @@ variable "db_name" {
 }
 
 variable "db_username" {
-  type      = string
-  sensitive = true
+  type    = string
+  default = "prism"
 }
 
-variable "db_password" {
-  type      = string
-  sensitive = true
-}
-
-variable "redis_auth_token" {
-  description = "Redis AUTH token with at least 16 characters."
+variable "redis_auth_token_secret_arn" {
+  description = "Secrets Manager ARN whose value is the Redis AUTH token."
   type        = string
-  sensitive   = true
-
-  validation {
-    condition     = length(var.redis_auth_token) >= 16
-    error_message = "redis_auth_token must contain at least 16 characters."
-  }
 }
 
 variable "api_desired_count" {

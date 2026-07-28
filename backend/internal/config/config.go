@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 const (
@@ -92,7 +94,7 @@ func Load() Config {
 		PriceProviderURL:   readEnv("PRISM_PRICE_PROVIDER_URL", ""),
 		PriceProviderToken: readEnv("PRISM_PRICE_PROVIDER_TOKEN", ""),
 		StoreDriver:        strings.ToLower(readEnv("PRISM_STORE", defaultStoreDriver)),
-		MySQLDSN:           readEnv("PRISM_MYSQL_DSN", ""),
+		MySQLDSN:           readMySQLDSN(),
 		RedisAddress:       readEnv("PRISM_REDIS_ADDR", defaultRedisAddr),
 		RedisPassword:      readEnv("PRISM_REDIS_PASSWORD", ""),
 		RedisDB:            readIntEnv("PRISM_REDIS_DB", 0),
@@ -100,6 +102,34 @@ func Load() Config {
 		RedisTLSServerName: readEnv("PRISM_REDIS_TLS_SERVER_NAME", ""),
 		PriceCacheTTL:      readDurationEnv("PRISM_PRICE_CACHE_TTL", defaultPriceTTL),
 	}
+}
+
+func readMySQLDSN() string {
+	if dsn := strings.TrimSpace(os.Getenv("PRISM_MYSQL_DSN")); dsn != "" {
+		return dsn
+	}
+
+	host := strings.TrimSpace(os.Getenv("PRISM_MYSQL_HOST"))
+	username := strings.TrimSpace(os.Getenv("PRISM_MYSQL_USERNAME"))
+	password := os.Getenv("PRISM_MYSQL_PASSWORD")
+	if host == "" && username == "" && password == "" {
+		return ""
+	}
+
+	port := readEnv("PRISM_MYSQL_PORT", "3306")
+	database := readEnv("PRISM_MYSQL_DATABASE", "prism")
+	return (&mysql.Config{
+		User:      username,
+		Passwd:    password,
+		Net:       "tcp",
+		Addr:      host + ":" + port,
+		DBName:    database,
+		ParseTime: true,
+		Loc:       time.UTC,
+		Params: map[string]string{
+			"charset": "utf8mb4",
+		},
+	}).FormatDSN()
 }
 
 // Validate checks configuration required by a specific executable. Production
@@ -118,7 +148,7 @@ func (c Config) Validate(component string) error {
 		problems = append(problems, fmt.Errorf("PRISM_AUTH_MODE must be local or cognito"))
 	}
 	if c.StoreDriver == "mysql" && strings.TrimSpace(c.MySQLDSN) == "" {
-		problems = append(problems, fmt.Errorf("PRISM_MYSQL_DSN is required when PRISM_STORE=mysql"))
+		problems = append(problems, fmt.Errorf("PRISM_MYSQL_DSN or complete PRISM_MYSQL_* connection fields are required when PRISM_STORE=mysql"))
 	}
 	if component == ComponentMigration && c.StoreDriver != "mysql" {
 		problems = append(problems, fmt.Errorf("PRISM_STORE must be mysql for migrations"))

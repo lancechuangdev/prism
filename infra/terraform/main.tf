@@ -2,6 +2,10 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_secretsmanager_secret_version" "redis_auth_token" {
+  secret_id = var.redis_auth_token_secret_arn
+}
+
 locals {
   name = "prism-${var.environment}"
   azs  = slice(data.aws_availability_zones.available.names, 0, 2)
@@ -10,20 +14,34 @@ locals {
     { name = "PRISM_ENV", value = "production" },
     { name = "PRISM_STORE", value = "mysql" },
     { name = "PRISM_CHAIN_ID", value = var.chain_id },
-    { name = "PRISM_CHAIN_RPC_URL", value = var.chain_rpc_url },
     { name = "PRISM_POOL_ADDRESS", value = var.pool_address },
     { name = "PRISM_MULTISIG_ADDRESS", value = var.multisig_address },
-    { name = "PRISM_MYSQL_DSN", value = "${var.db_username}:${var.db_password}@tcp(${aws_db_instance.main.address}:3306)/${var.db_name}?parseTime=true&charset=utf8mb4&loc=UTC" },
+    { name = "PRISM_MYSQL_HOST", value = aws_db_instance.main.address },
+    { name = "PRISM_MYSQL_PORT", value = "3306" },
+    { name = "PRISM_MYSQL_DATABASE", value = var.db_name },
     { name = "PRISM_REDIS_ADDR", value = "${aws_elasticache_replication_group.main.primary_endpoint_address}:6379" },
-    { name = "PRISM_REDIS_PASSWORD", value = var.redis_auth_token },
     { name = "PRISM_REDIS_TLS", value = "true" },
     { name = "PRISM_PRICE_PROVIDER", value = "http" },
     { name = "PRISM_PRICE_PROVIDER_URL", value = var.price_provider_url },
-    { name = "PRISM_PRICE_PROVIDER_TOKEN", value = var.price_provider_token },
     { name = "PRISM_AUTH_MODE", value = "cognito" },
     { name = "PRISM_COGNITO_REGION", value = var.cognito_region },
     { name = "PRISM_COGNITO_USER_POOL_ID", value = var.cognito_user_pool_id },
     { name = "PRISM_COGNITO_CLIENT_ID", value = var.cognito_client_id }
+  ]
+
+  common_secrets = [
+    { name = "PRISM_CHAIN_RPC_URL", valueFrom = var.chain_rpc_url_secret_arn },
+    { name = "PRISM_MYSQL_USERNAME", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:username::" },
+    { name = "PRISM_MYSQL_PASSWORD", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::" },
+    { name = "PRISM_REDIS_PASSWORD", valueFrom = var.redis_auth_token_secret_arn },
+    { name = "PRISM_PRICE_PROVIDER_TOKEN", valueFrom = var.price_provider_token_secret_arn }
+  ]
+
+  runtime_secret_arns = [
+    var.chain_rpc_url_secret_arn,
+    aws_db_instance.main.master_user_secret[0].secret_arn,
+    var.redis_auth_token_secret_arn,
+    var.price_provider_token_secret_arn
   ]
 }
 
@@ -171,7 +189,7 @@ resource "aws_db_instance" "main" {
   storage_encrypted           = true
   db_name                     = var.db_name
   username                    = var.db_username
-  password                    = var.db_password
+  manage_master_user_password = true
   multi_az                    = true
   publicly_accessible         = false
   backup_retention_period     = 7
@@ -199,7 +217,7 @@ resource "aws_elasticache_replication_group" "main" {
   multi_az_enabled           = true
   at_rest_encryption_enabled = true
   transit_encryption_enabled = true
-  auth_token                 = var.redis_auth_token
+  auth_token                 = data.aws_secretsmanager_secret_version.redis_auth_token.secret_string
   subnet_group_name          = aws_elasticache_subnet_group.main.name
   security_group_ids         = [aws_security_group.redis.id]
   snapshot_retention_limit   = 7
@@ -324,6 +342,19 @@ resource "aws_iam_role_policy_attachment" "execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "execution_secrets" {
+  name = "${local.name}-runtime-secrets"
+  role = aws_iam_role.execution.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = local.runtime_secret_arns
+    }]
+  })
+}
+
 resource "aws_iam_role" "task" {
   name = "${local.name}-task"
   assume_role_policy = jsonencode({
@@ -351,6 +382,7 @@ resource "aws_ecs_task_definition" "api" {
     essential   = true
     command     = ["/app/api"]
     environment = concat(local.common_environment, [{ name = "PRISM_API_PORT", value = "8080" }])
+    secrets     = local.common_secrets
     portMappings = [{
       containerPort = 8080
       protocol      = "tcp"
@@ -381,6 +413,7 @@ resource "aws_ecs_task_definition" "scheduler" {
     essential        = true
     command          = ["/app/scheduler"]
     environment      = local.common_environment
+    secrets          = local.common_secrets
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -407,6 +440,7 @@ resource "aws_ecs_task_definition" "migration" {
     essential   = true
     command     = ["/app/migrate"]
     environment = local.common_environment
+    secrets     = local.common_secrets
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -479,4 +513,3 @@ resource "aws_appautoscaling_policy" "api_cpu" {
     }
   }
 }
-

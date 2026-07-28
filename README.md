@@ -464,6 +464,11 @@ Do not use the Compose credentials or token secret in a public environment.
 | `PRISM_SYNC_INTERVAL` | `2m` | Scheduler synchronization interval. |
 | `PRISM_STORE` | `memory` | Repository driver: `memory` or `mysql`. |
 | `PRISM_MYSQL_DSN` | empty | MySQL connection string. |
+| `PRISM_MYSQL_HOST` | empty | MySQL host used when `PRISM_MYSQL_DSN` is not set. |
+| `PRISM_MYSQL_PORT` | `3306` | MySQL port used with separate connection fields. |
+| `PRISM_MYSQL_DATABASE` | `prism` | MySQL database used with separate connection fields. |
+| `PRISM_MYSQL_USERNAME` | empty | MySQL username used with separate connection fields. |
+| `PRISM_MYSQL_PASSWORD` | empty | MySQL password used with separate connection fields. |
 | `PRISM_REDIS_ADDR` | `127.0.0.1:6379` | Redis address. |
 | `PRISM_REDIS_PASSWORD` | empty | Redis password. |
 | `PRISM_REDIS_DB` | `0` | Redis database number. |

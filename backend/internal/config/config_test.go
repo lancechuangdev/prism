@@ -3,6 +3,8 @@ package config
 import (
 	"strings"
 	"testing"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 func TestLoadChainRPCConfiguration(t *testing.T) {
@@ -38,6 +40,27 @@ func TestLoadRedisTLSConfiguration(t *testing.T) {
 	}
 	if cfg.RedisTLSServerName != "master.prism.cache.amazonaws.com" {
 		t.Fatalf("Redis TLS server name = %q", cfg.RedisTLSServerName)
+	}
+}
+
+func TestLoadBuildsMySQLDSNFromSecretFields(t *testing.T) {
+	t.Setenv("PRISM_MYSQL_DSN", "")
+	t.Setenv("PRISM_MYSQL_HOST", "database.internal")
+	t.Setenv("PRISM_MYSQL_PORT", "3307")
+	t.Setenv("PRISM_MYSQL_DATABASE", "backend")
+	t.Setenv("PRISM_MYSQL_USERNAME", "prism")
+	t.Setenv("PRISM_MYSQL_PASSWORD", "p@ss:word")
+
+	cfg := Load()
+
+	parsed, err := mysql.ParseDSN(cfg.MySQLDSN)
+	if err != nil {
+		t.Fatalf("parse generated MySQL DSN: %v", err)
+	}
+	if parsed.User != "prism" || parsed.Passwd != "p@ss:word" ||
+		parsed.Addr != "database.internal:3307" || parsed.DBName != "backend" ||
+		!parsed.ParseTime {
+		t.Fatalf("unexpected generated MySQL configuration: %#v", parsed)
 	}
 }
 

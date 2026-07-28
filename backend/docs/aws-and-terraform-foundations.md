@@ -138,7 +138,7 @@ The production values file then supplies it:
 chain_id = "11155111"
 ```
 
-The real `terraform.tfvars` is ignored by Git because the current design still places sensitive database, Redis, RPC, and provider values in it. This is a temporary limitation, not the intended final secret-management design. The next production hardening step is to store those values in AWS Secrets Manager or Parameter Store and inject them into ECS without placing them directly in task-definition environment variables.
+The real `terraform.tfvars` is ignored by Git because it contains account-specific configuration, but runtime secret values are not placed in it. It contains only the Secrets Manager ARNs for the RPC URL, Redis token, and quote-provider token. RDS generates and manages its own master password. ECS resolves the authorized secret values when a task starts instead of storing them directly in task-definition environment variables. Terraform must read the Redis token to configure ElastiCache, so the encrypted, access-controlled remote state must still be treated as sensitive.
 
 Terraform state serves a different purpose. AWS knows that a database exists, but it does not know that the database corresponds to the Terraform address `aws_db_instance.main`. State records that relationship along with resource IDs, ARNs, endpoints, and other attributes needed to update the system later. Because state can also contain sensitive values, it must be encrypted, versioned, access-controlled, and protected against simultaneous writes.
 
@@ -198,6 +198,30 @@ The provider uses AWS credentials from a configured profile, environment, short-
 Creating an `aws_db_instance` therefore results in the provider making an RDS `CreateDBInstance` request, then polling RDS until the database becomes available. The provider returns identifiers and the database endpoint to Terraform Core, which stores them in state.
 
 References between resources establish their creation order. If the database references an RDS subnet group, Terraform knows that the VPC subnets and subnet group must exist before the database. Independent resources can be created in parallel.
+
+## How an API task starts
+
+The ECS task definition is a versioned template describing one API task: its container image, command, CPU and memory allocation, environment, secret references, network port, logging, and IAM roles. The ECS service uses that template to maintain the configured number of running tasks and registers healthy tasks with the load balancer.
+
+```mermaid
+sequenceDiagram
+    participant Service as ECS service
+    participant ECS as ECS/Fargate
+    participant ECR as Container registry
+    participant SM as Secrets Manager
+    participant Logs as CloudWatch Logs
+    participant API as Prism API
+
+    Service->>ECS: Maintain desired API task count
+    ECS->>ECR: Pull image using execution role
+    ECS->>SM: Retrieve authorized secrets
+    SM-->>ECS: Database, Redis, RPC, and quote secrets
+    ECS->>API: Start /app/api with configuration
+    API->>Logs: Write stdout and stderr
+    ECS->>Service: Task is running
+```
+
+Each Fargate task receives its own private network interface through `awsvpc` networking. The ECS service places those interfaces in the configured private subnets, applies the ECS security group, and registers the API container's port 8080 with the load balancer target group. ECS uses the execution role to pull the image, publish logs, and resolve secret values. The application receives the separate task role after it starts.
 
 ## Planning, applying, and detecting drift
 
