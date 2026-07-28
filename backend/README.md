@@ -944,7 +944,7 @@ The backend prepares all owner-controlled pool lifecycle calls through `POST /ap
 - [x] Pin versioned migrations to one MySQL connection so the advisory lock, schema changes, version records, and lock release use the same server session.
 - [x] Add an AWS Cognito authentication mode backed by Cognito User Pools and an API Gateway HTTP API JWT authorizer. Protect proposal and admin routes with access-token scopes and disable custom login/logout in Cognito mode. Hardhat helpers remain local-only and continue to use local authentication.
 - [x] Replace mock protocol oracle and DEX dependencies with Chainlink Data Feed and Uniswap V3 production adapters, while retaining mocks for local development, and validate the Sepolia network and configured contract addresses during deployment.
-- [ ] Store chain-specific contract addresses and deployment metadata durably, with explicit environment and network verification.
+- [x] Store chain-specific contract addresses and deployment metadata in versioned deployment manifests, with explicit environment and network verification; archive production manifests as deployment artifacts.
 - [ ] Define AWS infrastructure as code for ECS/Fargate, ALB, RDS, ElastiCache, networking, security groups, IAM, DNS, TLS certificates, autoscaling, and the one-shot migration task.
 - [ ] Load database, Redis, quote-provider, and temporary authentication secrets from AWS Secrets Manager or Parameter Store.
 - [ ] Add a readiness endpoint that checks required MySQL, Redis, and chain RPC dependencies before the load balancer sends traffic.

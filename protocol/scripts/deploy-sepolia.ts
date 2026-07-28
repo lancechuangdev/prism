@@ -1,3 +1,7 @@
+import { mkdir, rename, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { network } from "hardhat";
 
 const { ethers } = await network.create();
@@ -110,24 +114,38 @@ const prismPool = await ethers.deployContract("PrismPool", [
 ]);
 await prismPool.waitForDeployment();
 
-console.log(
-  JSON.stringify(
-    {
-      environment: "production",
-      network: "sepolia",
-      chainId: networkInfo.chainId.toString(),
-      deployer: deployer.address,
-      multisig,
-      feeAddress,
-      chainlinkOracle: await oracle.getAddress(),
-      uniswapV3SwapAdapter: await swap.getAddress(),
-      uniswapV3Router: router,
-      uniswapV3Quoter: quoter,
-      prismPool: await prismPool.getAddress(),
-      feeds,
-      pools,
-    },
-    null,
-    2,
-  ),
+const deployment = {
+  schemaVersion: 1,
+  environment: "production",
+  network: "sepolia",
+  chainId: networkInfo.chainId.toString(),
+  deployedAt: new Date().toISOString(),
+  deploymentBlock: await ethers.provider.getBlockNumber(),
+  deployer: deployer.address,
+  multisig,
+  feeAddress,
+  chainlinkOracle: await oracle.getAddress(),
+  uniswapV3SwapAdapter: await swap.getAddress(),
+  uniswapV3Router: router,
+  uniswapV3Quoter: quoter,
+  prismPool: await prismPool.getAddress(),
+  feeds,
+  pools,
+};
+
+const protocolRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
 );
+const deploymentPath = path.join(protocolRoot, "deployments", "sepolia.json");
+const temporaryPath = `${deploymentPath}.tmp`;
+await mkdir(path.dirname(deploymentPath), { recursive: true });
+await writeFile(
+  temporaryPath,
+  `${JSON.stringify(deployment, null, 2)}\n`,
+  "utf8",
+);
+await rename(temporaryPath, deploymentPath);
+
+console.log(JSON.stringify(deployment, null, 2));
+console.log(`Deployment metadata saved to ${deploymentPath}`);

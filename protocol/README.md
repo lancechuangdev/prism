@@ -86,15 +86,9 @@ Contract addresses belong to the running local node. Restarting `npm run node` r
 ## Sepolia production-integration deployment
 
 `ChainlinkOracle` reads token/USD Chainlink Data Feeds, rejects incomplete,
-non-positive, future-dated, and stale rounds, and normalizes feed answers to
-the pool's 1e18 price scale. `UniswapV3SwapAdapter` uses configured direct-pool
-fee tiers for exact-input and exact-output swaps through Uniswap V3
-SwapRouter02 and QuoterV2. The adapter verifies that the router and quoter use
-the same deployed V3 factory.
+non-positive, future-dated, and stale rounds, and normalizes feed answers to the pool's 1e18 price scale. `UniswapV3SwapAdapter` uses configured direct-pool fee tiers for exact-input and exact-output swaps through Uniswap V3 SwapRouter02 and QuoterV2. The adapter verifies that the router and quoter use the same deployed V3 factory.
 
-The Sepolia deployment requires explicit addresses rather than embedding
-addresses that may change. Obtain current feed and periphery addresses from
-the official Chainlink and Uniswap deployment directories, then run:
+The Sepolia deployment requires explicit addresses rather than embedding addresses that may change. Obtain current feed and periphery addresses from the official Chainlink and Uniswap deployment directories, then run:
 
 ```bash
 SEPOLIA_RPC_URL=https://... \
@@ -113,12 +107,30 @@ PRISM_UNISWAP_V3_POOLS='[
 npm run deploy:sepolia
 ```
 
-The script refuses non-Sepolia RPC networks, checks that every configured
-contract address has bytecode, confirms each feed currently returns an
-acceptable price, transfers oracle and adapter ownership to the multisig, and
-deploys `PrismPool` with the production adapters. Configure every swap
-direction used by repayment or liquidation. This is a testnet integration
-path, not a claim that Prism's own contracts have received a security audit.
+The script refuses non-Sepolia RPC networks, checks that every configured contract address has bytecode, confirms each feed currently returns an acceptable price, transfers oracle and adapter ownership to the multisig, and deploys `PrismPool` with the production adapters. It atomically writes the versioned deployment manifest to `deployments/sepolia.json`, including the environment, network, chain ID, deployment time and block, configured dependencies, and deployed addresses. Commit or upload this manifest as a deployment artifact so stdout or an operator's shell history is not the source of truth. Configure every swap direction used by repayment or liquidation.
+This is a testnet integration path, not a claim that Prism's own contracts have received a security audit.
+
+Before configuring a backend from the manifest, verify its identity:
+
+```bash
+jq -e '
+  .schemaVersion == 1 and
+  .environment == "production" and
+  .network == "sepolia" and
+  .chainId == "11155111"
+' protocol/deployments/sepolia.json
+
+export PRISM_ENV=production
+export PRISM_CHAIN_ID="$(
+  jq -r '.chainId' protocol/deployments/sepolia.json
+)"
+export PRISM_POOL_ADDRESS="$(
+  jq -r '.prismPool' protocol/deployments/sepolia.json
+)"
+export PRISM_MULTISIG_ADDRESS="$(
+  jq -r '.multisig' protocol/deployments/sepolia.json
+)"
+```
 
 To pass the generated contract addresses to the Docker backend:
 
