@@ -478,11 +478,14 @@ resource "aws_ecs_service" "api" {
 }
 
 resource "aws_ecs_service" "scheduler" {
-  name            = "${local.name}-scheduler"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.scheduler.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
+  name                               = "${local.name}-scheduler"
+  cluster                            = aws_ecs_cluster.main.id
+  task_definition                    = aws_ecs_task_definition.scheduler.arn
+  desired_count                      = 1
+  launch_type                        = "FARGATE"
+  scheduling_strategy                = "REPLICA"
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 100
 
   network_configuration {
     subnets          = values(aws_subnet.private)[*].id
