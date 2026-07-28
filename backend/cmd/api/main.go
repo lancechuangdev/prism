@@ -20,8 +20,21 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/logging"
 	"github.com/lancechuangdev/prism/backend/internal/multisig"
 	"github.com/lancechuangdev/prism/backend/internal/price"
+	"github.com/lancechuangdev/prism/backend/internal/readiness"
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
+
+const readinessTimeout = 2 * time.Second
+
+type readinessRepository interface {
+	store.Repository
+	Ping(context.Context) error
+}
+
+type readinessCache interface {
+	cache.Cache
+	Ping(context.Context) error
+}
 
 func main() {
 	cfg := config.Load()
@@ -133,7 +146,12 @@ func main() {
 	}
 	priceProvider := price.NewCachedQuoteProvider(upstreamPriceProvider, cacheStore, cfg.PriceCacheTTL)
 	priceService := price.NewService(priceProvider)
-	server := httpserver.New(cfg, logger, chainQueryService, poolTransactions, multisigTransactions, multisigReader, localAuth, authorizer, priceService)
+	readinessChecker := readiness.New(readinessTimeout, map[string]readiness.Probe{
+		"mysql":     repo.Ping,
+		"redis":     cacheStore.Ping,
+		"chain_rpc": reader.Ping,
+	})
+	server := httpserver.New(cfg, logger, chainQueryService, poolTransactions, multisigTransactions, multisigReader, localAuth, authorizer, priceService, readinessChecker)
 
 	go func() {
 		logger.Info("api server starting", slog.String("addr", server.Addr))
@@ -146,7 +164,7 @@ func main() {
 	waitForShutdown(server, logger)
 }
 
-func openStore(ctx context.Context, cfg config.Config) (store.Repository, func(), error) {
+func openStore(ctx context.Context, cfg config.Config) (readinessRepository, func(), error) {
 	switch cfg.StoreDriver {
 	case "memory":
 		return store.NewMemoryStore(), func() {}, nil
@@ -162,7 +180,7 @@ func openStore(ctx context.Context, cfg config.Config) (store.Repository, func()
 
 }
 
-func openCache(ctx context.Context, cfg config.Config) (cache.Cache, func(), error) {
+func openCache(ctx context.Context, cfg config.Config) (readinessCache, func(), error) {
 	redisCache, err := cache.OpenRedis(ctx, cache.RedisConfig{
 		Address:       cfg.RedisAddress,
 		Password:      cfg.RedisPassword,

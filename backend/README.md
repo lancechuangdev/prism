@@ -74,8 +74,11 @@ flowchart LR
 Health:
 
 ```text
-GET  /healthz
+GET  /healthz  process liveness; does not call dependencies
+GET  /readyz   readiness; checks MySQL, Redis, and chain RPC
 ```
+
+`/readyz` runs its dependency probes concurrently under a two-second overall timeout. It returns HTTP `200` with status `ready` only when every dependency responds and the RPC reports the configured chain ID. It returns HTTP `503` with status `not_ready` otherwise. Responses expose only dependency names and `ok` or `failed` states, not internal connection errors or credentials. The production load balancer uses `/readyz`; orchestration should use `/healthz` only to determine whether the API process itself is alive.
 
 Public read APIs:
 
@@ -505,6 +508,7 @@ Quick checks:
 
 ```bash
 curl http://localhost:8080/healthz
+curl http://localhost:8080/readyz
 curl http://localhost:8080/api/v1/poolBaseInfo?chainId=31337
 curl http://localhost:8080/api/v1/price?symbol=PRM
 ```
@@ -947,7 +951,7 @@ The backend prepares all owner-controlled pool lifecycle calls through `POST /ap
 - [x] Store chain-specific contract addresses and deployment metadata in versioned deployment manifests, with explicit environment and network verification; archive production manifests as deployment artifacts.
 - [x] Define AWS infrastructure as code for ECS/Fargate, ALB, RDS, ElastiCache, networking, security groups, IAM, DNS, TLS certificates, autoscaling, and the one-shot migration task. See `../infra/terraform`.
 - [x] Move database, Redis, quote-provider, RPC, and temporary authentication secrets out of `terraform.tfvars` and ECS task-definition environment variables into AWS Secrets Manager. RDS generates and manages its master password; ECS resolves only explicitly authorized secret ARNs at task startup. The Redis token is read by Terraform to configure ElastiCache and therefore remains protected by the encrypted remote state.
-- [ ] Add a readiness endpoint that checks required MySQL, Redis, and chain RPC dependencies before the load balancer sends traffic.
+- [x] Add a bounded `/readyz` endpoint that checks MySQL, Redis, and the configured chain RPC concurrently before the load balancer sends traffic, while retaining `/healthz` as a dependency-free liveness endpoint.
 - [ ] Coordinate scheduler replicas with leader election or a distributed lock, or enforce exactly one scheduler task.
 - [ ] Limit JSON request-body sizes and rate-limit login and proposal requests at API Gateway, AWS WAF, or the application.
 - [ ] Add explicit deadlines, retry policies, and backoff for chain RPC, quote-provider, MySQL, and Redis operations.

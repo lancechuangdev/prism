@@ -65,6 +65,14 @@ func (r *RPCReader) Close() {
 	r.client.Close()
 }
 
+func (r *RPCReader) Ping(ctx context.Context) error {
+	chainID, err := r.client.ChainID(ctx)
+	if err != nil {
+		return fmt.Errorf("read RPC chain ID: %w", err)
+	}
+	return r.validateChainID(chainID.String())
+}
+
 func (r *RPCReader) PoolOwner(ctx context.Context, chainID string) (string, error) {
 	if err := r.validateChainID(chainID); err != nil {
 		return "", err

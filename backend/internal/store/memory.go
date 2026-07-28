@@ -24,6 +24,10 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
+func (s *MemoryStore) Ping(context.Context) error {
+	return nil
+}
+
 func (s *MemoryStore) SetClockForTest(now func() time.Time) {
 	s.now = now
 }

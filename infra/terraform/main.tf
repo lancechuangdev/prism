@@ -269,7 +269,7 @@ resource "aws_lb_target_group" "api" {
   vpc_id      = aws_vpc.main.id
 
   health_check {
-    path                = "/healthz"
+    path                = "/readyz"
     matcher             = "200"
     healthy_threshold   = 2
     unhealthy_threshold = 3

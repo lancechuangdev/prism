@@ -43,6 +43,10 @@ func (s *MySQLStore) Close() error {
 	return s.db.Close()
 }
 
+func (s *MySQLStore) Ping(ctx context.Context) error {
+	return s.db.PingContext(ctx)
+}
+
 func (s *MySQLStore) Migrate(ctx context.Context) error {
 	if err := validateMySQLMigrations(); err != nil {
 		return err

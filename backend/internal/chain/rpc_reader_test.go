@@ -102,6 +102,9 @@ func TestRPCReaderReadsContractSnapshots(t *testing.T) {
 	}
 	defer reader.Close()
 
+	if err := reader.Ping(ctx); err != nil {
+		t.Fatalf("ping RPC reader: %v", err)
+	}
 	count, err := reader.PoolLength(ctx, "31337")
 	if err != nil || count != 1 {
 		t.Fatalf("pool count = %d, err = %v", count, err)

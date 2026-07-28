@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/config"
 	"github.com/lancechuangdev/prism/backend/internal/multisig"
 	"github.com/lancechuangdev/prism/backend/internal/price"
+	"github.com/lancechuangdev/prism/backend/internal/readiness"
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
 
@@ -105,6 +107,40 @@ func TestHealthz(t *testing.T) {
 
 	if body.Status != "ok" {
 		t.Fatalf("expected healthy response, got %+v", body)
+	}
+}
+
+func TestReadyz(t *testing.T) {
+	server := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var report readiness.Report
+	if err := json.NewDecoder(rec.Body).Decode(&report); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if report.Status != readiness.StatusReady {
+		t.Fatalf("unexpected readiness report: %+v", report)
+	}
+}
+
+func TestReadyzReturnsServiceUnavailable(t *testing.T) {
+	server := newTestServerWithReadiness(t, readiness.New(time.Second, map[string]readiness.Probe{
+		"redis": func(context.Context) error { return errors.New("unavailable") },
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
 	}
 }
 
@@ -618,6 +654,30 @@ func newTestServerWithPreparers(t *testing.T, poolCreator chain.PoolTransactionP
 }
 
 func newTestServerWithDependencies(t *testing.T, poolCreator chain.PoolTransactionPreparer, multisigPreparer multisig.ProposalPreparer, multisigReader multisig.ChainReader) *http.Server {
+	return newTestServerWithReadinessAndDependencies(
+		t,
+		readiness.New(time.Second, map[string]readiness.Probe{
+			"mysql":     func(context.Context) error { return nil },
+			"redis":     func(context.Context) error { return nil },
+			"chain_rpc": func(context.Context) error { return nil },
+		}),
+		poolCreator,
+		multisigPreparer,
+		multisigReader,
+	)
+}
+
+func newTestServerWithReadiness(t *testing.T, checker readiness.Checker) *http.Server {
+	return newTestServerWithReadinessAndDependencies(
+		t,
+		checker,
+		&testPoolTransactionPreparer{},
+		&testMultisigTransactionPreparer{},
+		defaultTestMultisigReader(),
+	)
+}
+
+func newTestServerWithReadinessAndDependencies(t *testing.T, checker readiness.Checker, poolCreator chain.PoolTransactionPreparer, multisigPreparer multisig.ProposalPreparer, multisigReader multisig.ChainReader) *http.Server {
 	t.Helper()
 
 	repo := store.NewMemoryStore()
@@ -641,6 +701,7 @@ func newTestServerWithDependencies(t *testing.T, poolCreator chain.PoolTransacti
 		localAuth,
 		auth.NewLocalAuthorizer(localAuth),
 		price.NewService(price.NewLocalQuoteProvider()),
+		checker,
 	)
 }
 

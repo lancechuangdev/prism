@@ -423,7 +423,8 @@ See [`protocol/README.md`](./protocol/README.md) for the contract-focused lifecy
 
 | Method | Path | Access |
 | --- | --- | --- |
-| `GET` | `/healthz` | Public |
+| `GET` | `/healthz` | Public; process liveness only |
+| `GET` | `/readyz` | Public; MySQL, Redis, and chain RPC readiness |
 | `GET` | `/api/v1/poolBaseInfo?chainId=31337` | Public |
 | `GET` | `/api/v1/poolDataInfo?chainId=31337` | Public |
 | `GET` | `/api/v1/token?chainId=31337` | Public |

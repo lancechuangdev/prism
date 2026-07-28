@@ -18,6 +18,7 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/config"
 	"github.com/lancechuangdev/prism/backend/internal/multisig"
 	"github.com/lancechuangdev/prism/backend/internal/price"
+	"github.com/lancechuangdev/prism/backend/internal/readiness"
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
 
@@ -131,7 +132,8 @@ func New(cfg config.Config,
 	multisigReader multisig.ChainReader,
 	localAuth *auth.LocalAuthenticator,
 	authorizer auth.Authorizer,
-	priceService *price.Service) *http.Server {
+	priceService *price.Service,
+	readinessChecker readiness.Checker) *http.Server {
 	mux := http.NewServeMux()
 	apiPrefix := "/api/v" + strings.TrimPrefix(cfg.APIVersion, "v")
 
@@ -140,6 +142,16 @@ func New(cfg config.Config,
 			Status: "ok",
 			App:    "prism-backend",
 		})
+	})
+
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		report := readinessChecker.Check(r.Context())
+		status := http.StatusOK
+		if report.Status != readiness.StatusReady {
+			status = http.StatusServiceUnavailable
+			logger.Warn("readiness check failed", slog.Any("dependencies", report.Dependencies))
+		}
+		writeJSON(w, status, report)
 	})
 
 	mux.HandleFunc("GET "+apiPrefix+"/poolBaseInfo", func(w http.ResponseWriter, r *http.Request) {

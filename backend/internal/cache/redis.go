@@ -69,6 +69,10 @@ func (c *RedisCache) Close() error {
 	return c.client.Close()
 }
 
+func (c *RedisCache) Ping(ctx context.Context) error {
+	return c.client.Ping(ctx).Err()
+}
+
 func (c *RedisCache) Get(ctx context.Context, key string) ([]byte, error) {
 	value, err := c.client.Get(ctx, key).Bytes()
 	if errors.Is(err, redis.Nil) {
