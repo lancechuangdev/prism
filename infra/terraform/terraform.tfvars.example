@@ -14,3 +14,5 @@ price_provider_token_secret_arn = "arn:aws:secretsmanager:us-west-2:123456789012
 cognito_region      = "us-west-2"
 cognito_user_pool_id = "us-west-2_example"
 cognito_client_id   = "example"
+login_rate_limit    = 20
+proposal_rate_limit = 100

@@ -134,3 +134,25 @@ variable "api_max_capacity" {
   type    = number
   default = 6
 }
+
+variable "login_rate_limit" {
+  description = "Approximate login requests allowed per source IP in AWS WAF's five-minute window."
+  type        = number
+  default     = 20
+
+  validation {
+    condition     = var.login_rate_limit >= 10
+    error_message = "login_rate_limit must be at least AWS WAF's minimum of 10."
+  }
+}
+
+variable "proposal_rate_limit" {
+  description = "Approximate proposal requests allowed per source IP in AWS WAF's five-minute window."
+  type        = number
+  default     = 100
+
+  validation {
+    condition     = var.proposal_rate_limit >= 10
+    error_message = "proposal_rate_limit must be at least AWS WAF's minimum of 10."
+  }
+}

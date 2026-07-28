@@ -59,3 +59,14 @@ aws ecs run-task \
 Wait for the migration task to exit successfully before deploying a new API or scheduler revision. The stack requires an encrypted, access-controlled S3 remote backend rather than silently creating local production state. The state bucket and lock table are bootstrap resources and must exist before `terraform init`. Rotating the RPC or quote-provider secret requires replacing the running ECS tasks so they resolve the new version. Rotating the Redis token also requires a reviewed Terraform plan to update ElastiCache.
 
 The scheduler ECS service deliberately runs one replica. Its rolling-deployment bounds are 0% minimum healthy and 100% maximum, so ECS stops the old scheduler before starting its replacement instead of briefly running two schedulers. Scheduler synchronization pauses during that replacement. Do not start standalone scheduler tasks or create a second scheduler service; use a distributed lock before introducing scheduler redundancy or zero-downtime overlap.
+
+## Request protection
+
+The regional AWS WAF web ACL attached to the Application Load Balancer rate-limits sensitive POST operations by originating IP:
+
+- `/api/v1/user/login`: approximately 20 requests per five-minute window;
+- `/api/v1/multisig/proposals`: approximately 100 requests per five-minute window.
+
+The limits are configurable with `login_rate_limit` and `proposal_rate_limit`. Requests over a limit receive HTTP `429`. AWS WAF estimates rates and may begin or end blocking near, rather than exactly at, the configured count; these rules protect service availability and do not replace authorization or business-level quotas.
+
+The Go API independently limits decoded JSON bodies to 4 KiB for login and 64 KiB for proposals. Oversized bodies receive HTTP `413`, including bodies that place excess data or whitespace after an otherwise valid JSON object.

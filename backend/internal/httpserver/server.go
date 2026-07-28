@@ -28,6 +28,8 @@ const (
 	httpWriteTimeout      = 30 * time.Second
 	httpIdleTimeout       = 60 * time.Second
 	httpMaxHeaderBytes    = 1 << 20
+	loginBodyLimit        = 4 << 10
+	proposalBodyLimit     = 64 << 10
 )
 
 type healthResponse struct {
@@ -218,8 +220,8 @@ func New(cfg config.Config,
 	if cfg.AuthMode != "cognito" {
 		mux.HandleFunc("POST "+apiPrefix+"/user/login", func(w http.ResponseWriter, r *http.Request) {
 			req := loginRequest{}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid login body"})
+			if err := decodeJSONBody(w, r, &req, loginBodyLimit); err != nil {
+				writeJSONBodyError(w, err, "invalid login body")
 				return
 			}
 
@@ -298,10 +300,8 @@ func New(cfg config.Config,
 
 	mux.Handle("POST "+apiPrefix+"/multisig/proposals", requireAuth(authorizer, cfg.ProposalWriteScope, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		req := prepareMultisigProposalRequest{}
-		decoder := json.NewDecoder(r.Body)
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid multisig proposal body"})
+		if err := decodeJSONBody(w, r, &req, proposalBodyLimit); err != nil {
+			writeJSONBodyError(w, err, "invalid multisig proposal body")
 			return
 		}
 
@@ -485,6 +485,31 @@ func decodeOperationParams[T any](raw json.RawMessage) (T, error) {
 		return params, fmt.Errorf("%w: operation params must contain one JSON object", multisig.ErrInvalidProposal)
 	}
 	return params, nil
+}
+
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, target any, limit int64) error {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return fmt.Errorf("request body must contain one JSON object")
+		}
+		return err
+	}
+	return nil
+}
+
+func writeJSONBodyError(w http.ResponseWriter, err error, invalidMessage string) {
+	var maxBytesError *http.MaxBytesError
+	if errors.As(err, &maxBytesError) {
+		writeJSON(w, http.StatusRequestEntityTooLarge, errorResponse{Error: "request body too large"})
+		return
+	}
+	writeJSON(w, http.StatusBadRequest, errorResponse{Error: invalidMessage})
 }
 
 func requireChainID(w http.ResponseWriter, r *http.Request) (string, bool) {

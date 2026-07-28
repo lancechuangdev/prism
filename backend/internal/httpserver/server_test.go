@@ -110,6 +110,38 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
+func TestLoginRejectsOversizedBody(t *testing.T) {
+	server := newTestServer(t)
+	body := bytes.NewBuffer(nil)
+	body.WriteString(`{"name":"admin","password":"`)
+	body.Write(bytes.Repeat([]byte("x"), loginBodyLimit))
+	body.WriteString(`"}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user/login", body)
+	rec := httptest.NewRecorder()
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected status %d, got %d", http.StatusRequestEntityTooLarge, rec.Code)
+	}
+}
+
+func TestProposalRejectsOversizedBody(t *testing.T) {
+	server := newTestServer(t)
+	token := loginForTest(t, server)
+	body := bytes.NewBufferString(`{}`)
+	body.Write(bytes.Repeat([]byte(" "), proposalBodyLimit))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/multisig/proposals", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected status %d, got %d", http.StatusRequestEntityTooLarge, rec.Code)
+	}
+}
+
 func TestReadyz(t *testing.T) {
 	server := newTestServer(t)
 
