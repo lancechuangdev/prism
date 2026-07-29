@@ -36,7 +36,8 @@ The RPC and quote-provider servers are operated and configured outside this stac
 Terraform marks the Redis token as sensitive and hides it from normal plan output, but the value can still exist in Terraform state. Anyone able to read the state must therefore be treated as having access to the Redis credential.
 
 Copy `terraform.tfvars.example` to an untracked `terraform.tfvars`, use an
-immutable container digest, and run:
+immutable container digest, and ensure both Terraform and AWS CLI v2 use the
+same authorized AWS identity. Then run:
 
 ```bash
 cp backend.hcl.example backend.hcl
@@ -46,17 +47,27 @@ terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
-Run migrations before updating the services:
+The apply enforces this order:
 
-```bash
-aws ecs run-task \
-  --cluster "$(terraform output -raw ecs_cluster_name)" \
-  --task-definition "$(terraform output -raw migration_task_definition_arn)" \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[$(terraform output -json private_subnet_ids | jq -r 'join(\",\")')],securityGroups=[$(terraform output -raw ecs_security_group_id)],assignPublicIp=DISABLED}"
+```mermaid
+flowchart LR
+    Infra["Create or update infrastructure"]
+    Task["Register migration task revision"]
+    Run["Run exact migration revision"]
+    Verify{"Exit code is 0?"}
+    Services["Update API and scheduler services"]
+    Stop["Stop apply; services remain unchanged"]
+
+    Infra --> Task --> Run --> Verify
+    Verify -->|"yes"| Services
+    Verify -->|"no"| Stop
 ```
 
-Wait for the migration task to exit successfully before deploying a new API or scheduler revision. The stack requires an encrypted, access-controlled S3 remote backend rather than silently creating local production state. The state bucket and lock table are bootstrap resources and must exist before `terraform init`. Rotating the RPC or quote-provider secret requires replacing the running ECS tasks so they resolve the new version. Rotating the Redis token also requires a reviewed Terraform plan to update ElastiCache.
+`terraform_data.migration_gate` is replaced whenever the migration task-definition ARN changes. Its local provisioner invokes `scripts/run-migration.sh`, which starts that exact task revision in the private ECS network, waits for it to stop, and requires the `migration` container to exit with code `0`. Both ECS services depend on this gate. A launch error, timeout, missing exit code, or nonzero exit stops `terraform apply` before Terraform updates either service. A failed gate remains eligible to run again on the next apply after the problem is corrected.
+
+Do not bypass this ordering with `terraform apply -target=aws_ecs_service.api`, `terraform apply -target=aws_ecs_service.scheduler`, or direct `aws ecs update-service` commands. The deployment identity needs permission to run, describe, and wait for ECS tasks in addition to its Terraform permissions.
+
+The stack requires an encrypted, access-controlled S3 remote backend rather than silently creating local production state. The state bucket and lock table are bootstrap resources and must exist before `terraform init`. Rotating the RPC or quote-provider secret requires replacing the running ECS tasks so they resolve the new version. Rotating the Redis token also requires a reviewed Terraform plan to update ElastiCache.
 
 The scheduler ECS service deliberately runs one replica. Its rolling-deployment bounds are 0% minimum healthy and 100% maximum, so ECS stops the old scheduler before starting its replacement instead of briefly running two schedulers. Scheduler synchronization pauses during that replacement. Do not start standalone scheduler tasks or create a second scheduler service; use a distributed lock before introducing scheduler redundancy or zero-downtime overlap.
 

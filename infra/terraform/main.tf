@@ -452,6 +452,30 @@ resource "aws_ecs_task_definition" "migration" {
   }])
 }
 
+resource "terraform_data" "migration_gate" {
+  triggers_replace = [
+    aws_ecs_task_definition.migration.arn,
+  ]
+
+  provisioner "local-exec" {
+    command = "${path.module}/scripts/run-migration.sh"
+
+    environment = {
+      AWS_REGION                = var.aws_region
+      ECS_CLUSTER               = aws_ecs_cluster.main.name
+      MIGRATION_TASK_DEFINITION = aws_ecs_task_definition.migration.arn
+      PRIVATE_SUBNET_IDS        = join(",", values(aws_subnet.private)[*].id)
+      ECS_SECURITY_GROUP_ID     = aws_security_group.ecs.id
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.execution,
+    aws_iam_role_policy.execution_secrets,
+    aws_route_table_association.private,
+  ]
+}
+
 resource "aws_ecs_service" "api" {
   name                               = "${local.name}-api"
   cluster                            = aws_ecs_cluster.main.id
@@ -474,7 +498,10 @@ resource "aws_ecs_service" "api" {
     container_port   = 8080
   }
 
-  depends_on = [aws_lb_listener.https]
+  depends_on = [
+    aws_lb_listener.https,
+    terraform_data.migration_gate,
+  ]
 }
 
 resource "aws_ecs_service" "scheduler" {
@@ -492,6 +519,8 @@ resource "aws_ecs_service" "scheduler" {
     security_groups  = [aws_security_group.ecs.id]
     assign_public_ip = false
   }
+
+  depends_on = [terraform_data.migration_gate]
 }
 
 resource "aws_appautoscaling_target" "api" {
