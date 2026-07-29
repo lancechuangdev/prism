@@ -16,3 +16,4 @@ cognito_user_pool_id = "us-west-2_example"
 cognito_client_id   = "example"
 login_rate_limit    = 20
 proposal_rate_limit = 100
+alarm_email         = "operations@example.com"

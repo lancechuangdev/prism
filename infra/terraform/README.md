@@ -70,3 +70,9 @@ The regional AWS WAF web ACL attached to the Application Load Balancer rate-limi
 The limits are configurable with `login_rate_limit` and `proposal_rate_limit`. Requests over a limit receive HTTP `429`. AWS WAF estimates rates and may begin or end blocking near, rather than exactly at, the configured count; these rules protect service availability and do not replace authorization or business-level quotas.
 
 The Go API independently limits decoded JSON bodies to 4 KiB for login and 64 KiB for proposals. Oversized bodies receive HTTP `413`, including bodies that place excess data or whitespace after an otherwise valid JSON object.
+
+## Monitoring and alerts
+
+Set `alarm_email` in `terraform.tfvars`. Terraform creates an SNS alerts topic and an email subscription; follow the AWS confirmation link sent to that address, because alerts are not delivered while the subscription is pending.
+
+CloudWatch Logs metric filters convert the services' structured JSON events into metrics and alarms for API 5xx responses, scheduler failures, upstream provider failures, and migration failures. A separate scheduler-lag alarm treats the absence of a success event in two consecutive five-minute windows as a failure. The stack also alarms when average ECS API CPU remains above 80% for ten minutes. Alarm and recovery notifications use the same SNS topic, whose ARN is available as the `alerts_topic_arn` Terraform output.

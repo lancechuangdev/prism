@@ -156,3 +156,13 @@ variable "proposal_rate_limit" {
     error_message = "proposal_rate_limit must be at least AWS WAF's minimum of 10."
   }
 }
+
+variable "alarm_email" {
+  description = "Email address subscribed to production CloudWatch alarms. AWS sends a confirmation link before alerts are delivered."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.alarm_email))
+    error_message = "alarm_email must be a valid email address."
+  }
+}

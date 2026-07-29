@@ -951,6 +951,20 @@ When PRISM_STORE=mysql is selected, API and scheduler can share indexed state th
 
 The backend prepares all owner-controlled pool lifecycle calls through `POST /api/v1/multisig/proposals`: `create_pool`, `settle_pool`, `repay_pool`, and `liquidate_pool`. Each operation validates its parameters, encodes the corresponding `PrismPool` call, and wraps that calldata in the existing prepare–approve–execute multisig workflow.
 
+### Production observability
+
+Non-local processes emit JSON logs so CloudWatch Logs can filter stable fields instead of parsing message text. Every API request accepts a valid `X-Request-ID` or generates one, returns it in the response header, includes it in request logs, and includes it in JSON error responses:
+
+```json
+{
+  "error": "chainId is required",
+  "code": "http_400",
+  "request_id": "938de57960e728d9dbaf02b8f4339b0e"
+}
+```
+
+The Terraform stack converts API 5xx, scheduler success/failure, provider failure, and migration failure events into CloudWatch metrics. Alarms notify the SNS alerts topic for API errors, provider and migration failures, sustained API CPU, and scheduler lag. Scheduler lag means no successful sync was logged in two consecutive five-minute periods. Set `alarm_email` in `terraform.tfvars` and confirm the subscription email from AWS; SNS cannot deliver alerts until that confirmation is complete.
+
 ### TODO: Production blockers
 
 - [x] Pin versioned migrations to one MySQL connection so the advisory lock, schema changes, version records, and lock release use the same server session.
@@ -963,6 +977,6 @@ The backend prepares all owner-controlled pool lifecycle calls through `POST /ap
 - [x] Enforce one scheduler task for now: the ECS service has a fixed desired count of one and 0%/100% rolling-deployment bounds, which stop the old task before starting its replacement. Do not run standalone scheduler tasks or another scheduler service; add a distributed lock before allowing redundancy or overlapping deployments.
 - [x] Limit login JSON bodies to 4 KiB and proposal JSON bodies to 64 KiB in the application, returning HTTP 413 when exceeded; attach AWS WAF to the ALB and rate-limit login and proposal POST requests per source IP with configurable five-minute limits and HTTP 429 responses.
 - [x] Add bounded deadlines and retry/backoff policies for chain RPC, quote-provider, MySQL, and Redis operations. Retry only idempotent reads and initial connectivity checks; never blindly retry database writes or transaction-like operations with ambiguous outcomes.
-- [ ] Add production metrics, request correlation IDs, structured error fields, CloudWatch alarms, scheduler-lag monitoring, and alerts for migration or provider failures.
+- [x] Add production metrics, request correlation IDs, structured error fields, CloudWatch alarms, scheduler-lag monitoring, and alerts for migration or provider failures.
 - [ ] Enforce safe deployment ordering: create or update infrastructure and the one-shot migration task first, run the migration and verify a successful exit, and only then update the API and scheduler ECS services. The current Terraform code does not enforce this sequence and must not be used as-is for a schema-changing production deployment.
 - [ ] Bootstrap and protect the remote Terraform state store with the separate `../infra/terraform-bootstrap` stack: use a private S3 bucket with KMS encryption, versioning, public-access blocking, TLS enforcement, native S3 lockfiles, state-deletion protection, and least-privilege access that excludes historical versions. Downloaded state files are ignored and state access is treated as secret access because the state can contain the Redis token even when Terraform redacts it from plan output.

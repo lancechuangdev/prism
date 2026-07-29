@@ -21,3 +21,7 @@ output "ecs_security_group_id" {
 output "waf_web_acl_arn" {
   value = aws_wafv2_web_acl.api.arn
 }
+
+output "alerts_topic_arn" {
+  value = aws_sns_topic.alerts.arn
+}

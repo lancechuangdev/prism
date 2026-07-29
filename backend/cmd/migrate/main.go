@@ -19,7 +19,11 @@ func main() {
 	cfg := config.Load()
 	logger := logging.New(cfg.Env)
 	if err := cfg.Validate(config.ComponentMigration); err != nil {
-		logger.Error("invalid configuration", slog.Any("error", err))
+		logger.Error(
+			"invalid configuration",
+			slog.String("event", "migration_failure"),
+			slog.Any("error", err),
+		)
 		os.Exit(1)
 	}
 
@@ -30,14 +34,22 @@ func main() {
 
 	mysqlStore, err := store.OpenMySQL(ctx, cfg.MySQLDSN)
 	if err != nil {
-		logger.Error("open MySQL for migration failed", slog.Any("error", err))
+		logger.Error(
+			"open MySQL for migration failed",
+			slog.String("event", "migration_failure"),
+			slog.Any("error", err),
+		)
 		os.Exit(1)
 	}
 	defer mysqlStore.Close()
 
 	if err := mysqlStore.Migrate(ctx); err != nil {
-		logger.Error("database migration failed", slog.Any("error", err))
+		logger.Error(
+			"database migration failed",
+			slog.String("event", "migration_failure"),
+			slog.Any("error", err),
+		)
 		os.Exit(1)
 	}
-	logger.Info("database migrations completed")
+	logger.Info("database migrations completed", slog.String("event", "migration_success"))
 }

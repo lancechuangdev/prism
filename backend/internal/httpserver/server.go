@@ -3,6 +3,7 @@ package httpserver
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -124,7 +125,9 @@ type liquidatePoolOperationParams struct {
 }
 
 type errorResponse struct {
-	Error string `json:"error"`
+	Error     string `json:"error"`
+	Code      string `json:"code,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
 }
 
 func New(cfg config.Config,
@@ -152,7 +155,7 @@ func New(cfg config.Config,
 		status := http.StatusOK
 		if report.Status != readiness.StatusReady {
 			status = http.StatusServiceUnavailable
-			logger.Warn("readiness check failed", slog.Any("dependencies", report.Dependencies))
+			logRequest(logger, r, slog.LevelWarn, "readiness check failed", slog.Any("dependencies", report.Dependencies))
 		}
 		writeJSON(w, status, report)
 	})
@@ -165,7 +168,7 @@ func New(cfg config.Config,
 
 		pools, err := chainQueryService.ListPoolBases(r.Context(), chainID)
 		if err != nil {
-			logger.Error("list pool base info failed", slog.Any("error", err))
+			logRequest(logger, r, slog.LevelError, "list pool base info failed", slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "list pool base info failed"})
 			return
 		}
@@ -188,7 +191,7 @@ func New(cfg config.Config,
 
 		pools, err := chainQueryService.ListPoolData(r.Context(), chainID)
 		if err != nil {
-			logger.Error("list pool data info failed", slog.Any("error", err))
+			logRequest(logger, r, slog.LevelError, "list pool data info failed", slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "list pool data info failed"})
 			return
 		}
@@ -211,7 +214,7 @@ func New(cfg config.Config,
 
 		tokens, err := chainQueryService.ListTokens(r.Context(), chainID)
 		if err != nil {
-			logger.Error("list tokens failed", slog.Any("error", err))
+			logRequest(logger, r, slog.LevelError, "list tokens failed", slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "list tokens failed"})
 			return
 		}
@@ -231,7 +234,7 @@ func New(cfg config.Config,
 				if errors.Is(err, auth.ErrInvalidCredentials) {
 					writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid username or password"})
 				} else {
-					logger.Error("create login session failed", slog.Any("error", err))
+					logRequest(logger, r, slog.LevelError, "create login session failed", slog.Any("error", err))
 					writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "login failed"})
 				}
 				return
@@ -243,7 +246,7 @@ func New(cfg config.Config,
 		mux.Handle("POST "+apiPrefix+"/user/logout", requireAuth(authorizer, "", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := tokenFromRequest(r)
 			if err := localAuth.Logout(r.Context(), token); err != nil {
-				logger.Error("delete login session failed", slog.Any("error", err))
+				logRequest(logger, r, slog.LevelError, "delete login session failed", slog.Any("error", err))
 				writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "logout failed"})
 				return
 			}
@@ -278,7 +281,7 @@ func New(cfg config.Config,
 	mux.HandleFunc("GET "+apiPrefix+"/multisig", func(w http.ResponseWriter, r *http.Request) {
 		result, err := multisigReader.Config(r.Context())
 		if err != nil {
-			logger.Error("read multisig config failed", slog.Any("error", err))
+			logRequest(logger, r, slog.LevelError, "read multisig config failed", slog.Any("error", err))
 			writeJSON(w, http.StatusBadGateway, errorResponse{Error: "read multisig config failed"})
 			return
 		}
@@ -292,7 +295,7 @@ func New(cfg config.Config,
 				writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
 				return
 			}
-			logger.Error("read multisig proposal status failed", slog.Any("error", err))
+			logRequest(logger, r, slog.LevelError, "read multisig proposal status failed", slog.Any("error", err))
 			writeJSON(w, http.StatusBadGateway, errorResponse{Error: "read multisig proposal status failed"})
 			return
 		}
@@ -308,7 +311,7 @@ func New(cfg config.Config,
 
 		multisigConfig, err := multisigReader.Config(r.Context())
 		if err != nil {
-			logger.Error("read multisig config failed", slog.Any("error", err))
+			logRequest(logger, r, slog.LevelError, "read multisig config failed", slog.Any("error", err))
 			writeJSON(w, http.StatusBadGateway, errorResponse{Error: "read multisig config failed"})
 			return
 		}
@@ -441,14 +444,14 @@ func New(cfg config.Config,
 				writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
 				return
 			}
-			logger.Error("prepare multisig proposal failed", slog.Any("error", err))
+			logRequest(logger, r, slog.LevelError, "prepare multisig proposal failed", slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "prepare multisig proposal failed"})
 			return
 		}
 
 		transactionHash, err := multisigReader.TransactionHash(r.Context(), result.Proposal)
 		if err != nil {
-			logger.Error("read multisig proposal hash failed", slog.Any("error", err))
+			logRequest(logger, r, slog.LevelError, "read multisig proposal hash failed", slog.Any("error", err))
 			writeJSON(w, http.StatusBadGateway, errorResponse{Error: "read multisig proposal hash failed"})
 			return
 		}
@@ -462,7 +465,7 @@ func New(cfg config.Config,
 
 	return &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           requestLogger(logger, withRequestDeadline(mux)),
+		Handler:           withCorrelationID(requestLogger(logger, withRequestDeadline(mux))),
 		ReadHeaderTimeout: httpReadHeaderTimeout,
 		ReadTimeout:       httpReadTimeout,
 		WriteTimeout:      httpWriteTimeout,
@@ -562,6 +565,7 @@ func tokenFromRequest(r *http.Request) string {
 }
 
 type usernameContextKey struct{}
+type requestIDContextKey struct{}
 
 func contextWithUsername(r *http.Request, username string) context.Context {
 	return context.WithValue(r.Context(), usernameContextKey{}, username)
@@ -572,14 +576,105 @@ func usernameFromContext(ctx context.Context) (string, bool) {
 	return username, ok
 }
 
-func requestLogger(logger *slog.Logger, next http.Handler) http.Handler {
+func withCorrelationID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Info("http request", slog.String("method", r.Method), slog.String("path", r.URL.Path))
-		next.ServeHTTP(w, r)
+		requestID := strings.TrimSpace(r.Header.Get("X-Request-ID"))
+		if !validRequestID(requestID) {
+			requestID = newRequestID()
+		}
+		w.Header().Set("X-Request-ID", requestID)
+		ctx := context.WithValue(r.Context(), requestIDContextKey{}, requestID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
+func validRequestID(value string) bool {
+	if value == "" || len(value) > 128 {
+		return false
+	}
+	for _, character := range value {
+		if (character < 'a' || character > 'z') &&
+			(character < 'A' || character > 'Z') &&
+			(character < '0' || character > '9') &&
+			character != '-' && character != '_' && character != '.' {
+			return false
+		}
+	}
+	return true
+}
+
+func newRequestID() string {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return fmt.Sprintf("%x", value)
+}
+
+func requestIDFromContext(ctx context.Context) string {
+	requestID, _ := ctx.Value(requestIDContextKey{}).(string)
+	return requestID
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusRecorder) WriteHeader(status int) {
+	if w.status != 0 {
+		return
+	}
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *statusRecorder) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func requestLogger(logger *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		recorder := &statusRecorder{ResponseWriter: w}
+		next.ServeHTTP(recorder, r)
+		if recorder.status == 0 {
+			recorder.status = http.StatusOK
+		}
+		logger.Info(
+			"http request completed",
+			slog.String("event", "http_request"),
+			slog.String("request_id", requestIDFromContext(r.Context())),
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.Int("status", recorder.status),
+			slog.Int64("duration_ms", time.Since(started).Milliseconds()),
+		)
+	})
+}
+
+func logRequest(logger *slog.Logger, r *http.Request, level slog.Level, message string, attrs ...slog.Attr) {
+	args := make([]any, 0, len(attrs)+1)
+	args = append(args, slog.String("request_id", requestIDFromContext(r.Context())))
+	for _, attr := range attrs {
+		args = append(args, attr)
+	}
+	logger.Log(r.Context(), level, message, args...)
+}
+
 func writeJSON(w http.ResponseWriter, statusCode int, data any) {
+	if response, ok := data.(errorResponse); ok {
+		if response.Code == "" {
+			response.Code = "http_" + strconv.Itoa(statusCode)
+		}
+		if response.RequestID == "" {
+			response.RequestID = w.Header().Get("X-Request-ID")
+		}
+		data = response
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(data)

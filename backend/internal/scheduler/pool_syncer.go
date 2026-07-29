@@ -38,6 +38,12 @@ func (s *PoolSyncer) RunOnce(ctx context.Context) error {
 	defer cancel()
 
 	if err := chain.SyncPools(ctx, s.reader, s.repo, s.chainID); err != nil {
+		s.logger.Error(
+			"chain provider sync failed",
+			slog.String("event", "provider_failure"),
+			slog.String("provider", "chain_rpc"),
+			slog.Any("error", err),
+		)
 		return err
 	}
 
@@ -61,6 +67,13 @@ func (s *PoolSyncer) RunOnce(ctx context.Context) error {
 	if s.priceService != nil && s.symbol != "" {
 		quote, err := s.priceService.Latest(ctx, s.symbol)
 		if err != nil {
+			s.logger.Error(
+				"quote provider refresh failed",
+				slog.String("event", "provider_failure"),
+				slog.String("provider", "quote"),
+				slog.String("symbol", s.symbol),
+				slog.Any("error", err),
+			)
 			return fmt.Errorf("refresh price %s: %w", s.symbol, err)
 		}
 		s.logger.Info(
@@ -72,6 +85,11 @@ func (s *PoolSyncer) RunOnce(ctx context.Context) error {
 		)
 	}
 
+	s.logger.Info(
+		"scheduler sync succeeded",
+		slog.String("event", "scheduler_sync_success"),
+		slog.Int64("completed_at_unix", time.Now().Unix()),
+	)
 	return nil
 }
 
@@ -81,7 +99,11 @@ func (s *PoolSyncer) Run(ctx context.Context, interval time.Duration) error {
 	}
 
 	if err := s.RunOnce(ctx); err != nil {
-		s.logger.Error("initial pool sync failed", slog.Any("error", err))
+		s.logger.Error(
+			"initial pool sync failed",
+			slog.String("event", "scheduler_sync_failure"),
+			slog.Any("error", err),
+		)
 	}
 
 	ticker := time.NewTicker(interval)
@@ -93,7 +115,11 @@ func (s *PoolSyncer) Run(ctx context.Context, interval time.Duration) error {
 			return nil
 		case <-ticker.C:
 			if err := s.RunOnce(ctx); err != nil {
-				s.logger.Error("scheduled pool sync failed", slog.Any("error", err))
+				s.logger.Error(
+					"scheduled pool sync failed",
+					slog.String("event", "scheduler_sync_failure"),
+					slog.Any("error", err),
+				)
 			}
 		}
 	}

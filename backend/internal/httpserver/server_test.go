@@ -110,6 +110,52 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
+func TestErrorResponseIncludesRequestID(t *testing.T) {
+	server := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/poolBaseInfo", nil)
+	req.Header.Set("X-Request-ID", "test-request-123")
+	rec := httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+	if got := rec.Header().Get("X-Request-ID"); got != "test-request-123" {
+		t.Fatalf("expected response request ID test-request-123, got %q", got)
+	}
+
+	var body errorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Code != "http_400" {
+		t.Fatalf("expected error code http_400, got %q", body.Code)
+	}
+	if body.RequestID != "test-request-123" {
+		t.Fatalf("expected body request ID test-request-123, got %q", body.RequestID)
+	}
+}
+
+func TestInvalidRequestIDIsReplaced(t *testing.T) {
+	server := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Header.Set("X-Request-ID", "invalid request id")
+	rec := httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(rec, req)
+
+	requestID := rec.Header().Get("X-Request-ID")
+	if requestID == "" || requestID == "invalid request id" {
+		t.Fatalf("expected generated request ID, got %q", requestID)
+	}
+	if !validRequestID(requestID) {
+		t.Fatalf("generated invalid request ID %q", requestID)
+	}
+}
+
 func TestLoginRejectsOversizedBody(t *testing.T) {
 	server := newTestServer(t)
 	body := bytes.NewBuffer(nil)
