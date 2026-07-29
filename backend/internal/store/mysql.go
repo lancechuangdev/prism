@@ -8,8 +8,17 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
+
+	"github.com/lancechuangdev/prism/backend/internal/resilience"
 )
+
+var mysqlPingRetryPolicy = resilience.Policy{
+	Attempts:       3,
+	AttemptTimeout: 5 * time.Second,
+	InitialBackoff: 100 * time.Millisecond,
+	MaxBackoff:     time.Second,
+}
 
 type MySQLStore struct {
 	db  *sql.DB
@@ -21,17 +30,33 @@ func OpenMySQL(ctx context.Context, dsn string) (*MySQLStore, error) {
 		return nil, fmt.Errorf("DSN is required")
 	}
 
-	db, err := sql.Open("mysql", dsn)
+	mysqlConfig, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse MySQL DSN: %w", err)
+	}
+	if mysqlConfig.Timeout == 0 {
+		mysqlConfig.Timeout = 5 * time.Second
+	}
+	if mysqlConfig.ReadTimeout == 0 {
+		mysqlConfig.ReadTimeout = 30 * time.Second
+	}
+	if mysqlConfig.WriteTimeout == 0 {
+		mysqlConfig.WriteTimeout = 30 * time.Second
+	}
+
+	db, err := sql.Open("mysql", mysqlConfig.FormatDSN())
 	if err != nil {
 		return nil, err
 	}
+	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(time.Minute)
 
 	store := &MySQLStore{
 		db:  db,
 		now: time.Now,
 	}
 
-	if err := db.PingContext(ctx); err != nil {
+	if err := resilience.Do(ctx, mysqlPingRetryPolicy, db.PingContext); err != nil {
 		_ = db.Close()
 		return nil, err
 	}

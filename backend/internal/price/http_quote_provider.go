@@ -9,7 +9,16 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/lancechuangdev/prism/backend/internal/resilience"
 )
+
+var quoteRetryPolicy = resilience.Policy{
+	Attempts:       3,
+	AttemptTimeout: 5 * time.Second,
+	InitialBackoff: 100 * time.Millisecond,
+	MaxBackoff:     time.Second,
+}
 
 type HTTPQuoteProvider struct {
 	baseURL string
@@ -38,16 +47,26 @@ func (p *HTTPQuoteProvider) Latest(ctx context.Context, symbol string) (Quote, e
 	query.Set("symbol", symbol)
 	endpoint.RawQuery = query.Encode()
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
-	if err != nil {
-		return Quote{}, fmt.Errorf("create price request: %w", err)
-	}
-	request.Header.Set("Accept", "application/json")
-	if p.token != "" {
-		request.Header.Set("Authorization", "Bearer "+p.token)
-	}
+	response, err := resilience.Value(ctx, quoteRetryPolicy, func(attemptCtx context.Context) (*http.Response, error) {
+		request, err := http.NewRequestWithContext(attemptCtx, http.MethodGet, endpoint.String(), nil)
+		if err != nil {
+			return nil, fmt.Errorf("create price request: %w", err)
+		}
+		request.Header.Set("Accept", "application/json")
+		if p.token != "" {
+			request.Header.Set("Authorization", "Bearer "+p.token)
+		}
 
-	response, err := p.client.Do(request)
+		response, err := p.client.Do(request)
+		if err != nil {
+			return nil, err
+		}
+		if response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= http.StatusInternalServerError {
+			_ = response.Body.Close()
+			return nil, fmt.Errorf("provider returned retryable status %s", response.Status)
+		}
+		return response, nil
+	})
 	if err != nil {
 		return Quote{}, fmt.Errorf("fetch price for %s: %w", symbol, err)
 	}

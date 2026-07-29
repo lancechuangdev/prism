@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/lancechuangdev/prism/backend/internal/resilience"
 )
 
 func TestHTTPQuoteProviderFetchesQuote(t *testing.T) {
@@ -48,6 +50,50 @@ func TestHTTPQuoteProviderFetchesQuote(t *testing.T) {
 		quote.Source != "test-provider" ||
 		!quote.UpdatedAt.Equal(updatedAt) {
 		t.Fatalf("unexpected quote: %+v", quote)
+	}
+}
+
+func TestHTTPQuoteProviderRetriesServerFailures(t *testing.T) {
+	originalPolicy := quoteRetryPolicy
+	quoteRetryPolicy = resilience.Policy{
+		Attempts: 3, AttemptTimeout: time.Second, InitialBackoff: time.Millisecond, MaxBackoff: time.Millisecond,
+	}
+	t.Cleanup(func() { quoteRetryPolicy = originalPolicy })
+
+	attempts := 0
+	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		attempts++
+		status := http.StatusServiceUnavailable
+		body := `{}`
+		if attempts == 3 {
+			status = http.StatusOK
+			body = `{
+				"symbol":"PRM",
+				"currency":"USD",
+				"price":"1",
+				"source":"test",
+				"updatedAt":"2026-07-26T12:00:00Z"
+			}`
+		}
+		return &http.Response{
+			StatusCode: status,
+			Status:     http.StatusText(status),
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     make(http.Header),
+			Request:    r,
+		}, nil
+	})
+
+	provider, err := NewHTTPQuoteProvider("https://prices.example/v1/quote", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.client.Transport = transport
+	if _, err := provider.Latest(context.Background(), "PRM"); err != nil {
+		t.Fatalf("fetch quote: %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts = %d", attempts)
 	}
 }
 

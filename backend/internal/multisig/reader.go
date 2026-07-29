@@ -5,17 +5,28 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/lancechuangdev/prism/backend/internal/contracts"
+	"github.com/lancechuangdev/prism/backend/internal/resilience"
 )
 
 var ErrInvalidTransactionHash = errors.New("invalid multisig transaction hash")
+
+var rpcReadRetryPolicy = resilience.Policy{
+	Attempts:       3,
+	AttemptTimeout: 5 * time.Second,
+	InitialBackoff: 100 * time.Millisecond,
+	MaxBackoff:     time.Second,
+}
 
 type Config struct {
 	ChainID         string   `json:"chain_id"`
@@ -63,12 +74,15 @@ func NewRPCReader(ctx context.Context, rpcURL string, contractAddress string) (*
 		return nil, fmt.Errorf("invalid ThresholdMultiSig address %q", contractAddress)
 	}
 
-	client, err := ethclient.DialContext(ctx, rpcURL)
+	rpcClient, err := rpc.DialOptions(ctx, rpcURL, rpc.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	if err != nil {
 		return nil, fmt.Errorf("connect chain RPC: %w", err)
 	}
+	client := ethclient.NewClient(rpcClient)
 	address := common.HexToAddress(contractAddress)
-	code, err := client.CodeAt(ctx, address, nil)
+	code, err := resilience.Value(ctx, rpcReadRetryPolicy, func(attemptCtx context.Context) ([]byte, error) {
+		return client.CodeAt(attemptCtx, address, nil)
+	})
 	if err != nil {
 		client.Close()
 		return nil, fmt.Errorf("read ThresholdMultiSig bytecode: %w", err)
@@ -77,7 +91,7 @@ func NewRPCReader(ctx context.Context, rpcURL string, contractAddress string) (*
 		client.Close()
 		return nil, fmt.Errorf("no contract deployed at ThresholdMultiSig address %s", address.Hex())
 	}
-	chainID, err := client.ChainID(ctx)
+	chainID, err := resilience.Value(ctx, rpcReadRetryPolicy, client.ChainID)
 	if err != nil {
 		client.Close()
 		return nil, fmt.Errorf("read RPC chain ID: %w", err)
@@ -97,6 +111,10 @@ func (r *RPCReader) Close() {
 }
 
 func (r *RPCReader) Config(ctx context.Context) (Config, error) {
+	return resilience.Value(ctx, rpcReadRetryPolicy, r.config)
+}
+
+func (r *RPCReader) config(ctx context.Context) (Config, error) {
 	opts := &bind.CallOpts{Context: ctx}
 	ownerCount, err := r.contract.OwnerCount(opts)
 	if err != nil {
@@ -144,9 +162,11 @@ func (r *RPCReader) TransactionHash(ctx context.Context, proposal Proposal) (str
 	if !ok || nonce.Sign() < 0 {
 		return "", fmt.Errorf("%w: nonce must be a non-negative decimal integer", ErrInvalidProposal)
 	}
-	hash, err := r.contract.GetTransactionHash(
-		&bind.CallOpts{Context: ctx}, target, value, data, nonce,
-	)
+	hash, err := resilience.Value(ctx, rpcReadRetryPolicy, func(attemptCtx context.Context) ([32]byte, error) {
+		return r.contract.GetTransactionHash(
+			&bind.CallOpts{Context: attemptCtx}, target, value, data, nonce,
+		)
+	})
 	if err != nil {
 		return "", fmt.Errorf("call getTransactionHash: %w", err)
 	}
@@ -159,6 +179,12 @@ func (r *RPCReader) ProposalStatus(ctx context.Context, transactionHash string) 
 		return ProposalStatus{}, fmt.Errorf("%w: must be a 32-byte hex value", ErrInvalidTransactionHash)
 	}
 	hash := common.BytesToHash(decodedHash)
+	return resilience.Value(ctx, rpcReadRetryPolicy, func(attemptCtx context.Context) (ProposalStatus, error) {
+		return r.proposalStatus(attemptCtx, hash)
+	})
+}
+
+func (r *RPCReader) proposalStatus(ctx context.Context, hash common.Hash) (ProposalStatus, error) {
 	opts := &bind.CallOpts{Context: ctx}
 
 	approvalCount, err := r.contract.ApprovalCount(opts, hash)
@@ -177,7 +203,7 @@ func (r *RPCReader) ProposalStatus(ctx context.Context, transactionHash string) 
 	if err != nil {
 		return ProposalStatus{}, fmt.Errorf("call executed: %w", err)
 	}
-	config, err := r.Config(ctx)
+	config, err := r.config(ctx)
 	if err != nil {
 		return ProposalStatus{}, err
 	}

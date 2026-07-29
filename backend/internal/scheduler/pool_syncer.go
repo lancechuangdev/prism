@@ -11,6 +11,8 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
 
+const syncDeadline = 30 * time.Second
+
 type PoolSyncer struct {
 	reader       chain.Reader
 	repo         store.Repository
@@ -32,6 +34,9 @@ func NewPoolSyncer(reader chain.Reader, repo store.Repository, chainID string, p
 }
 
 func (s *PoolSyncer) RunOnce(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, syncDeadline)
+	defer cancel()
+
 	if err := chain.SyncPools(ctx, s.reader, s.repo, s.chainID); err != nil {
 		return err
 	}

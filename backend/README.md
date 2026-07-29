@@ -408,6 +408,14 @@ With `PRISM_ENV=production`, each executable validates its configuration before 
 
 The API bounds client connections with a 5-second header timeout, 15-second request-read timeout, 30-second response-write timeout, 60-second idle timeout, and 1 MiB maximum request-header size. These limits also apply locally so runtime behavior matches production.
 
+### Dependency deadlines and retries
+
+The API has a 30-second startup deadline and gives each HTTP request a 25-second context deadline. Each scheduler synchronization cycle has a 30-second deadline, and the one-shot migration process has a ten-minute overall deadline. Cancellation propagates into MySQL, Redis, quote-provider, and chain RPC calls.
+
+Idempotent Chain RPC and HTTPS quote reads use at most three five-second attempts with exponential backoff beginning at 100 milliseconds and capped at one second. Quote retries are limited to network failures, HTTP 429, and HTTP 5xx responses. Redis uses its native client policy: a five-second connection timeout, three-second read and write timeouts, and at most two retries with 100-millisecond-to-one-second backoff.
+
+MySQL uses a five-second connection timeout and 30-second socket read and write timeouts. Its initial connectivity check uses three bounded attempts. Individual queries remain bounded by the request, scheduler-cycle, migration, or shutdown context. Database writes and transaction-like protocol operations are not automatically retried because a lost response does not prove that the server failed to apply the operation; callers must reconcile state before repeating them.
+
 ## Storage
 
 The backend supports two storage modes:
@@ -954,7 +962,7 @@ The backend prepares all owner-controlled pool lifecycle calls through `POST /ap
 - [x] Add a bounded `/readyz` endpoint that checks MySQL, Redis, and the configured chain RPC concurrently before the load balancer sends traffic, while retaining `/healthz` as a dependency-free liveness endpoint.
 - [x] Enforce one scheduler task for now: the ECS service has a fixed desired count of one and 0%/100% rolling-deployment bounds, which stop the old task before starting its replacement. Do not run standalone scheduler tasks or another scheduler service; add a distributed lock before allowing redundancy or overlapping deployments.
 - [x] Limit login JSON bodies to 4 KiB and proposal JSON bodies to 64 KiB in the application, returning HTTP 413 when exceeded; attach AWS WAF to the ALB and rate-limit login and proposal POST requests per source IP with configurable five-minute limits and HTTP 429 responses.
-- [ ] Add explicit deadlines, retry policies, and backoff for chain RPC, quote-provider, MySQL, and Redis operations.
+- [x] Add bounded deadlines and retry/backoff policies for chain RPC, quote-provider, MySQL, and Redis operations. Retry only idempotent reads and initial connectivity checks; never blindly retry database writes or transaction-like operations with ambiguous outcomes.
 - [ ] Add production metrics, request correlation IDs, structured error fields, CloudWatch alarms, scheduler-lag monitoring, and alerts for migration or provider failures.
 - [ ] Enforce safe deployment ordering: create or update infrastructure and the one-shot migration task first, run the migration and verify a successful exit, and only then update the API and scheduler ECS services. The current Terraform code does not enforce this sequence and must not be used as-is for a schema-changing production deployment.
 - [ ] Bootstrap and protect the remote Terraform state store with the separate `../infra/terraform-bootstrap` stack: use a private S3 bucket with KMS encryption, versioning, public-access blocking, TLS enforcement, native S3 lockfiles, state-deletion protection, and least-privilege access that excludes historical versions. Downloaded state files are ignored and state access is treated as secret access because the state can contain the Redis token even when Terraform redacts it from plan output.

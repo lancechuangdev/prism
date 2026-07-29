@@ -44,9 +44,15 @@ func redisOptions(cfg RedisConfig) (*redis.Options, error) {
 		return nil, fmt.Errorf("Redis TLS is required in production")
 	}
 	options := &redis.Options{
-		Addr:     cfg.Address,
-		Password: cfg.Password,
-		DB:       cfg.DB,
+		Addr:            cfg.Address,
+		Password:        cfg.Password,
+		DB:              cfg.DB,
+		DialTimeout:     5 * time.Second,
+		ReadTimeout:     3 * time.Second,
+		WriteTimeout:    3 * time.Second,
+		MaxRetries:      2,
+		MinRetryBackoff: 100 * time.Millisecond,
+		MaxRetryBackoff: time.Second,
 	}
 	if cfg.TLSEnabled {
 		serverName := cfg.TLSServerName

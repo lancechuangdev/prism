@@ -25,6 +25,7 @@ import (
 )
 
 const readinessTimeout = 2 * time.Second
+const startupTimeout = 30 * time.Second
 
 type readinessRepository interface {
 	store.Repository
@@ -44,7 +45,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	repo, closeStore, err := openStore(context.Background(), cfg)
+	startupCtx, cancelStartup := context.WithTimeout(context.Background(), startupTimeout)
+	defer cancelStartup()
+
+	repo, closeStore, err := openStore(startupCtx, cfg)
 	if err != nil {
 		logger.Error("open store failed", slog.Any("error", err))
 		os.Exit(1)
@@ -52,7 +56,7 @@ func main() {
 	defer closeStore()
 
 	reader, err := chain.NewRPCReader(
-		context.Background(),
+		startupCtx,
 		cfg.ChainRPCURL,
 		cfg.PoolAddress,
 	)
@@ -63,7 +67,7 @@ func main() {
 	defer reader.Close()
 
 	multisigReader, err := multisig.NewRPCReader(
-		context.Background(),
+		startupCtx,
 		cfg.ChainRPCURL,
 		cfg.MultisigAddress,
 	)
@@ -72,7 +76,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer multisigReader.Close()
-	multisigConfig, err := multisigReader.Config(context.Background())
+	multisigConfig, err := multisigReader.Config(startupCtx)
 	if err != nil {
 		logger.Error("read multisig config failed", slog.Any("error", err))
 		os.Exit(1)
@@ -81,7 +85,7 @@ func main() {
 		logger.Error("multisig chain ID mismatch", slog.String("rpcChainID", multisigConfig.ChainID), slog.String("configuredChainID", cfg.ChainID))
 		os.Exit(1)
 	}
-	poolOwner, err := reader.PoolOwner(context.Background(), cfg.ChainID)
+	poolOwner, err := reader.PoolOwner(startupCtx, cfg.ChainID)
 	if err != nil {
 		logger.Error("read PrismPool owner failed", slog.Any("error", err))
 		os.Exit(1)
@@ -95,7 +99,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := chain.SyncPools(context.Background(), reader, repo, cfg.ChainID); err != nil {
+	if err := chain.SyncPools(startupCtx, reader, repo, cfg.ChainID); err != nil {
 		logger.Error("sync contract data failed", slog.Any("error", err))
 		os.Exit(1)
 	}
@@ -112,7 +116,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cacheStore, closeCache, err := openCache(context.Background(), cfg)
+	cacheStore, closeCache, err := openCache(startupCtx, cfg)
 	if err != nil {
 		logger.Error("open cache failed", slog.Any("error", err))
 		os.Exit(1)
@@ -152,6 +156,7 @@ func main() {
 		"chain_rpc": reader.Ping,
 	})
 	server := httpserver.New(cfg, logger, chainQueryService, poolTransactions, multisigTransactions, multisigReader, localAuth, authorizer, priceService, readinessChecker)
+	cancelStartup()
 
 	go func() {
 		logger.Info("api server starting", slog.String("addr", server.Addr))

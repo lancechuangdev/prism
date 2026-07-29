@@ -6,11 +6,14 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/lancechuangdev/prism/backend/internal/config"
 	"github.com/lancechuangdev/prism/backend/internal/logging"
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
+
+const migrationDeadline = 10 * time.Minute
 
 func main() {
 	cfg := config.Load()
@@ -20,8 +23,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	ctx, cancel := context.WithTimeout(signalCtx, migrationDeadline)
+	defer cancel()
 
 	mysqlStore, err := store.OpenMySQL(ctx, cfg.MySQLDSN)
 	if err != nil {

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -12,7 +14,15 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/lancechuangdev/prism/backend/internal/contracts"
+	"github.com/lancechuangdev/prism/backend/internal/resilience"
 )
+
+var rpcReadRetryPolicy = resilience.Policy{
+	Attempts:       3,
+	AttemptTimeout: 5 * time.Second,
+	InitialBackoff: 100 * time.Millisecond,
+	MaxBackoff:     time.Second,
+}
 
 type RPCReader struct {
 	client  *ethclient.Client
@@ -28,16 +38,16 @@ func NewRPCReader(ctx context.Context, rpcURL string, poolAddress string) (*RPCR
 		return nil, fmt.Errorf("invalid PrismPool address %q", poolAddress)
 	}
 
-	client, err := ethclient.DialContext(ctx, rpcURL)
+	rpcClient, err := rpc.DialOptions(ctx, rpcURL, rpc.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	if err != nil {
 		return nil, fmt.Errorf("connect chain RPC: %w", err)
 	}
-	return newRPCReader(ctx, client, poolAddress)
+	return newRPCReader(ctx, ethclient.NewClient(rpcClient), poolAddress)
 }
 
 // Constructor for Production
 func newRPCReader(ctx context.Context, client *ethclient.Client, poolAddress string) (*RPCReader, error) {
-	chainID, err := client.ChainID(ctx)
+	chainID, err := resilience.Value(ctx, rpcReadRetryPolicy, client.ChainID)
 	if err != nil {
 		client.Close()
 		return nil, fmt.Errorf("read RPC chain ID: %w", err)
@@ -66,7 +76,7 @@ func (r *RPCReader) Close() {
 }
 
 func (r *RPCReader) Ping(ctx context.Context) error {
-	chainID, err := r.client.ChainID(ctx)
+	chainID, err := resilience.Value(ctx, rpcReadRetryPolicy, r.client.ChainID)
 	if err != nil {
 		return fmt.Errorf("read RPC chain ID: %w", err)
 	}
@@ -77,7 +87,9 @@ func (r *RPCReader) PoolOwner(ctx context.Context, chainID string) (string, erro
 	if err := r.validateChainID(chainID); err != nil {
 		return "", err
 	}
-	owner, err := r.pool.Owner(&bind.CallOpts{Context: ctx})
+	owner, err := resilience.Value(ctx, rpcReadRetryPolicy, func(attemptCtx context.Context) (common.Address, error) {
+		return r.pool.Owner(&bind.CallOpts{Context: attemptCtx})
+	})
 	if err != nil {
 		return "", fmt.Errorf("call owner: %w", err)
 	}
@@ -88,7 +100,9 @@ func (r *RPCReader) PoolLength(ctx context.Context, chainID string) (int64, erro
 	if err := r.validateChainID(chainID); err != nil {
 		return 0, err
 	}
-	count, err := r.pool.PoolCount(&bind.CallOpts{Context: ctx})
+	count, err := resilience.Value(ctx, rpcReadRetryPolicy, func(attemptCtx context.Context) (*big.Int, error) {
+		return r.pool.PoolCount(&bind.CallOpts{Context: attemptCtx})
+	})
 	if err != nil {
 		return 0, fmt.Errorf("call poolCount: %w", err)
 	}
@@ -102,7 +116,9 @@ func (r *RPCReader) PoolBaseInfo(ctx context.Context, chainID string, contractIn
 	if err := r.validateIndex(chainID, contractIndex); err != nil {
 		return ContractPoolBase{}, err
 	}
-	pool, err := r.pool.GetPool(&bind.CallOpts{Context: ctx}, big.NewInt(contractIndex))
+	pool, err := resilience.Value(ctx, rpcReadRetryPolicy, func(attemptCtx context.Context) (contracts.PrismPoolPoolBaseInfo, error) {
+		return r.pool.GetPool(&bind.CallOpts{Context: attemptCtx}, big.NewInt(contractIndex))
+	})
 	if err != nil {
 		return ContractPoolBase{}, fmt.Errorf("call getPool(%d): %w", contractIndex, err)
 	}
@@ -127,7 +143,9 @@ func (r *RPCReader) PoolDataInfo(ctx context.Context, chainID string, contractIn
 	if err := r.validateIndex(chainID, contractIndex); err != nil {
 		return ContractPoolData{}, err
 	}
-	data, err := r.pool.GetPoolData(&bind.CallOpts{Context: ctx}, big.NewInt(contractIndex))
+	data, err := resilience.Value(ctx, rpcReadRetryPolicy, func(attemptCtx context.Context) (contracts.PrismPoolPoolDataInfo, error) {
+		return r.pool.GetPoolData(&bind.CallOpts{Context: attemptCtx}, big.NewInt(contractIndex))
+	})
 	if err != nil {
 		return ContractPoolData{}, fmt.Errorf("call getPoolData(%d): %w", contractIndex, err)
 	}
@@ -151,11 +169,15 @@ func (r *RPCReader) TokenInfo(ctx context.Context, chainID string, tokenAddress 
 	if err != nil {
 		return ContractToken{}, fmt.Errorf("bind ERC-20 token %s: %w", address.Hex(), err)
 	}
-	symbol, err := token.Symbol(&bind.CallOpts{Context: ctx})
+	symbol, err := resilience.Value(ctx, rpcReadRetryPolicy, func(attemptCtx context.Context) (string, error) {
+		return token.Symbol(&bind.CallOpts{Context: attemptCtx})
+	})
 	if err != nil {
 		return ContractToken{}, fmt.Errorf("call symbol on %s: %w", address.Hex(), err)
 	}
-	decimals, err := token.Decimals(&bind.CallOpts{Context: ctx})
+	decimals, err := resilience.Value(ctx, rpcReadRetryPolicy, func(attemptCtx context.Context) (uint8, error) {
+		return token.Decimals(&bind.CallOpts{Context: attemptCtx})
+	})
 	if err != nil {
 		return ContractToken{}, fmt.Errorf("call decimals on %s: %w", address.Hex(), err)
 	}

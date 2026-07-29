@@ -28,6 +28,7 @@ const (
 	httpWriteTimeout      = 30 * time.Second
 	httpIdleTimeout       = 60 * time.Second
 	httpMaxHeaderBytes    = 1 << 20
+	httpRequestDeadline   = 25 * time.Second
 	loginBodyLimit        = 4 << 10
 	proposalBodyLimit     = 64 << 10
 )
@@ -461,13 +462,21 @@ func New(cfg config.Config,
 
 	return &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           requestLogger(logger, mux),
+		Handler:           requestLogger(logger, withRequestDeadline(mux)),
 		ReadHeaderTimeout: httpReadHeaderTimeout,
 		ReadTimeout:       httpReadTimeout,
 		WriteTimeout:      httpWriteTimeout,
 		IdleTimeout:       httpIdleTimeout,
 		MaxHeaderBytes:    httpMaxHeaderBytes,
 	}
+}
+
+func withRequestDeadline(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), httpRequestDeadline)
+		defer cancel()
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 func decodeOperationParams[T any](raw json.RawMessage) (T, error) {

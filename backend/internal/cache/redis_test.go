@@ -3,6 +3,7 @@ package cache
 import (
 	"crypto/tls"
 	"testing"
+	"time"
 )
 
 func TestRedisOptionsEnableVerifiedTLS(t *testing.T) {
@@ -24,6 +25,14 @@ func TestRedisOptionsEnableVerifiedTLS(t *testing.T) {
 	}
 	if options.TLSConfig.InsecureSkipVerify {
 		t.Fatal("certificate verification must remain enabled")
+	}
+	if options.DialTimeout != 5*time.Second ||
+		options.ReadTimeout != 3*time.Second ||
+		options.WriteTimeout != 3*time.Second ||
+		options.MaxRetries != 2 ||
+		options.MinRetryBackoff != 100*time.Millisecond ||
+		options.MaxRetryBackoff != time.Second {
+		t.Fatalf("unexpected Redis resilience options: %+v", options)
 	}
 }
 
