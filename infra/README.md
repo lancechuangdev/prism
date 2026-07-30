@@ -232,19 +232,52 @@ flowchart LR
 
 ## Prerequisites
 
-Install Node.js, Docker, AWS CLI v2, Terraform 1.7 or newer, and `jq`. Confirm that the local AWS CLI is authenticated to the intended account:
+Install Node.js, Docker, AWS CLI v2, Terraform 1.7 or newer, and `jq`:
 
 ```bash
 aws --version
 terraform version
 docker --version
 jq --version
+```
 
-aws login --region us-west-2
+### Configure a non-root AWS identity
+
+Use AWS IAM Identity Center for human access so the CLI and Terraform receive temporary credentials rather than root credentials or long-lived access keys. If Identity Center is not configured yet, sign in to the AWS console as root only long enough to:
+
+1. Enable IAM Identity Center and secure the root user with MFA.
+2. Create a personal, attributable Identity Center user.
+3. Create and assign a permission set for the target AWS account. The initial bootstrap requires `AdministratorAccess` because this stack creates IAM roles and policies; replace it with a reviewed least-privilege deployment permission set when one is available.
+4. Record the AWS access portal URL and the Region in which Identity Center is configured, then sign out of the root user.
+
+Configure a named CLI profile. `prism-sso` and `prism-deploy` are local names and may be changed. Accept the default `sso:account:access` registration scope, then authenticate as the new Identity Center user and select the assigned account and permission set:
+
+```bash
+aws configure sso --profile prism-deploy
+# SSO session name: prism-sso
+# SSO start URL: the AWS access portal URL
+# SSO region: the Region shown in IAM Identity Center
+# SSO registration scopes: sso:account:access
+
+aws configure set region us-west-2 --profile prism-deploy
+aws configure set output json --profile prism-deploy
+aws sso login --profile prism-deploy
+```
+
+The Identity Center Region may differ from the `us-west-2` workload Region. Clear any static credentials inherited by the shell, select the SSO profile, and verify the active identity:
+
+```bash
+unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+export AWS_PROFILE=prism-deploy
+export AWS_REGION=us-west-2
+export AWS_DEFAULT_REGION=us-west-2
+
 aws sts get-caller-identity
 ```
 
-Use `aws configure sso` and `aws sso login` instead when the AWS account is managed through IAM Identity Center. Do not deploy with root credentials or commit access keys, wallet private keys, secret values, `backend.hcl`, or `terraform.tfvars`.
+The account ID must be the intended deployment account, and the ARN should be an Identity Center assumed role such as `arn:aws:sts::ACCOUNT_ID:assumed-role/AWSReservedSSO_AdministratorAccess_.../USERNAME`. Do not continue if the ARN ends in `:root`.
+
+Do not deploy with root credentials or commit access keys, wallet private keys, secret values, `backend.hcl`, or `terraform.tfvars`.
 
 Set the working AWS values after authentication:
 
