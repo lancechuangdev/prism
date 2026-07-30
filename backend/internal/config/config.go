@@ -37,70 +37,76 @@ const (
 )
 
 type Config struct {
-	Env                 string
-	Port                string
-	APIVersion          string
-	ChainID             string
-	ChainRPCURL         string
-	PoolAddress         string
-	MultisigAddress     string
-	SyncInterval        time.Duration
-	AdminUsername       string
-	AdminPassword       string
-	TokenSecret         string
-	TokenTTL            time.Duration
-	AuthMode            string
-	CognitoRegion       string
-	CognitoUserPoolID   string
-	CognitoClientID     string
-	ProposalWriteScope  string
-	AdminReadScope      string
-	PriceSymbol         string
-	PriceProvider       string
-	OracleAddress       string
-	PriceTokenAddresses string
-	StoreDriver         string
-	MySQLDSN            string
-	RedisAddress        string
-	RedisPassword       string
-	RedisDB             int
-	RedisTLS            bool
-	RedisTLSServerName  string
-	PriceCacheTTL       time.Duration
+	Env                    string
+	Port                   string
+	APIVersion             string
+	ChainID                string
+	ChainRPCURL            string
+	PoolAddress            string
+	MultisigAddress        string
+	SyncInterval           time.Duration
+	LiquidationEnabled     bool
+	LiquidationKey         string
+	LiquidationSlippageBPS uint64
+	AdminUsername          string
+	AdminPassword          string
+	TokenSecret            string
+	TokenTTL               time.Duration
+	AuthMode               string
+	CognitoRegion          string
+	CognitoUserPoolID      string
+	CognitoClientID        string
+	ProposalWriteScope     string
+	AdminReadScope         string
+	PriceSymbol            string
+	PriceProvider          string
+	OracleAddress          string
+	PriceTokenAddresses    string
+	StoreDriver            string
+	MySQLDSN               string
+	RedisAddress           string
+	RedisPassword          string
+	RedisDB                int
+	RedisTLS               bool
+	RedisTLSServerName     string
+	PriceCacheTTL          time.Duration
 }
 
 func Load() Config {
 	return Config{
-		Env:                 readEnv("PRISM_ENV", defaultEnv),
-		Port:                readEnv("PRISM_API_PORT", defaultPort),
-		APIVersion:          readEnv("PRISM_API_VERSION", defaultAPIVersion),
-		ChainID:             readEnv("PRISM_CHAIN_ID", defaultChainId),
-		ChainRPCURL:         readEnv("PRISM_CHAIN_RPC_URL", defaultChainRPCURL),
-		PoolAddress:         readEnv("PRISM_POOL_ADDRESS", ""),
-		MultisigAddress:     readEnv("PRISM_MULTISIG_ADDRESS", ""),
-		SyncInterval:        readDurationEnv("PRISM_SYNC_INTERVAL", defaultSyncEvery),
-		AdminUsername:       readEnv("PRISM_ADMIN_USERNAME", defaultAdminUser),
-		AdminPassword:       readEnv("PRISM_ADMIN_PASSWORD", defaultAdminPass),
-		TokenSecret:         readEnv("PRISM_TOKEN_SECRET", defaultTokenSecret),
-		TokenTTL:            readDurationEnv("PRISM_TOKEN_TTL", defaultTokenTTL),
-		AuthMode:            strings.ToLower(readEnv("PRISM_AUTH_MODE", defaultAuthMode)),
-		CognitoRegion:       readEnv("PRISM_COGNITO_REGION", ""),
-		CognitoUserPoolID:   readEnv("PRISM_COGNITO_USER_POOL_ID", ""),
-		CognitoClientID:     readEnv("PRISM_COGNITO_CLIENT_ID", ""),
-		ProposalWriteScope:  readEnv("PRISM_COGNITO_PROPOSAL_SCOPE", defaultProposalScope),
-		AdminReadScope:      readEnv("PRISM_COGNITO_ADMIN_SCOPE", defaultAdminScope),
-		PriceSymbol:         readEnv("PRISM_PRICE_SYMBOL", defaultPriceSymbol),
-		PriceProvider:       readEnv("PRISM_PRICE_PROVIDER", defaultPriceProvider),
-		OracleAddress:       readEnv("PRISM_ORACLE_ADDRESS", ""),
-		PriceTokenAddresses: readEnv("PRISM_PRICE_TOKEN_ADDRESSES", ""),
-		StoreDriver:         strings.ToLower(readEnv("PRISM_STORE", defaultStoreDriver)),
-		MySQLDSN:            readMySQLDSN(),
-		RedisAddress:        readEnv("PRISM_REDIS_ADDR", defaultRedisAddr),
-		RedisPassword:       readEnv("PRISM_REDIS_PASSWORD", ""),
-		RedisDB:             readIntEnv("PRISM_REDIS_DB", 0),
-		RedisTLS:            readBoolEnv("PRISM_REDIS_TLS", false),
-		RedisTLSServerName:  readEnv("PRISM_REDIS_TLS_SERVER_NAME", ""),
-		PriceCacheTTL:       readDurationEnv("PRISM_PRICE_CACHE_TTL", defaultPriceTTL),
+		Env:                    readEnv("PRISM_ENV", defaultEnv),
+		Port:                   readEnv("PRISM_API_PORT", defaultPort),
+		APIVersion:             readEnv("PRISM_API_VERSION", defaultAPIVersion),
+		ChainID:                readEnv("PRISM_CHAIN_ID", defaultChainId),
+		ChainRPCURL:            readEnv("PRISM_CHAIN_RPC_URL", defaultChainRPCURL),
+		PoolAddress:            readEnv("PRISM_POOL_ADDRESS", ""),
+		MultisigAddress:        readEnv("PRISM_MULTISIG_ADDRESS", ""),
+		SyncInterval:           readDurationEnv("PRISM_SYNC_INTERVAL", defaultSyncEvery),
+		LiquidationEnabled:     readBoolEnv("PRISM_LIQUIDATION_ENABLED", false),
+		LiquidationKey:         readEnv("PRISM_LIQUIDATION_PRIVATE_KEY", ""),
+		LiquidationSlippageBPS: readUint64Env("PRISM_LIQUIDATION_SLIPPAGE_BPS", 100),
+		AdminUsername:          readEnv("PRISM_ADMIN_USERNAME", defaultAdminUser),
+		AdminPassword:          readEnv("PRISM_ADMIN_PASSWORD", defaultAdminPass),
+		TokenSecret:            readEnv("PRISM_TOKEN_SECRET", defaultTokenSecret),
+		TokenTTL:               readDurationEnv("PRISM_TOKEN_TTL", defaultTokenTTL),
+		AuthMode:               strings.ToLower(readEnv("PRISM_AUTH_MODE", defaultAuthMode)),
+		CognitoRegion:          readEnv("PRISM_COGNITO_REGION", ""),
+		CognitoUserPoolID:      readEnv("PRISM_COGNITO_USER_POOL_ID", ""),
+		CognitoClientID:        readEnv("PRISM_COGNITO_CLIENT_ID", ""),
+		ProposalWriteScope:     readEnv("PRISM_COGNITO_PROPOSAL_SCOPE", defaultProposalScope),
+		AdminReadScope:         readEnv("PRISM_COGNITO_ADMIN_SCOPE", defaultAdminScope),
+		PriceSymbol:            readEnv("PRISM_PRICE_SYMBOL", defaultPriceSymbol),
+		PriceProvider:          readEnv("PRISM_PRICE_PROVIDER", defaultPriceProvider),
+		OracleAddress:          readEnv("PRISM_ORACLE_ADDRESS", ""),
+		PriceTokenAddresses:    readEnv("PRISM_PRICE_TOKEN_ADDRESSES", ""),
+		StoreDriver:            strings.ToLower(readEnv("PRISM_STORE", defaultStoreDriver)),
+		MySQLDSN:               readMySQLDSN(),
+		RedisAddress:           readEnv("PRISM_REDIS_ADDR", defaultRedisAddr),
+		RedisPassword:          readEnv("PRISM_REDIS_PASSWORD", ""),
+		RedisDB:                readIntEnv("PRISM_REDIS_DB", 0),
+		RedisTLS:               readBoolEnv("PRISM_REDIS_TLS", false),
+		RedisTLSServerName:     readEnv("PRISM_REDIS_TLS_SERVER_NAME", ""),
+		PriceCacheTTL:          readDurationEnv("PRISM_PRICE_CACHE_TTL", defaultPriceTTL),
 	}
 }
 
@@ -153,6 +159,12 @@ func (c Config) Validate(component string) error {
 	if component == ComponentMigration && c.StoreDriver != "mysql" {
 		problems = append(problems, fmt.Errorf("PRISM_STORE must be mysql for migrations"))
 	}
+	if component == ComponentScheduler && c.LiquidationEnabled && strings.TrimSpace(c.LiquidationKey) == "" {
+		problems = append(problems, fmt.Errorf("PRISM_LIQUIDATION_PRIVATE_KEY is required when PRISM_LIQUIDATION_ENABLED=true"))
+	}
+	if c.LiquidationSlippageBPS > 10_000 {
+		problems = append(problems, fmt.Errorf("PRISM_LIQUIDATION_SLIPPAGE_BPS must not exceed 10000"))
+	}
 
 	if !strings.EqualFold(c.Env, "production") {
 		return errors.Join(problems...)
@@ -180,7 +192,6 @@ func (c Config) Validate(component string) error {
 	if strings.TrimSpace(c.PriceTokenAddresses) == "" {
 		problems = append(problems, fmt.Errorf("PRISM_PRICE_TOKEN_ADDRESSES is required in production"))
 	}
-
 	if component == ComponentAPI {
 		if strings.TrimSpace(c.MultisigAddress) == "" {
 			problems = append(problems, fmt.Errorf("PRISM_MULTISIG_ADDRESS is required in production"))
@@ -223,6 +234,18 @@ func readBoolEnv(key string, fallback bool) bool {
 		return fallback
 	}
 	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func readUint64Env(key string, fallback uint64) uint64 {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseUint(value, 10, 64)
 	if err != nil {
 		return fallback
 	}

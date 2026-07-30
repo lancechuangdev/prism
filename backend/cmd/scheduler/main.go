@@ -12,6 +12,7 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/cache"
 	"github.com/lancechuangdev/prism/backend/internal/chain"
 	"github.com/lancechuangdev/prism/backend/internal/config"
+	"github.com/lancechuangdev/prism/backend/internal/liquidation"
 	"github.com/lancechuangdev/prism/backend/internal/logging"
 	"github.com/lancechuangdev/prism/backend/internal/price"
 	"github.com/lancechuangdev/prism/backend/internal/scheduler"
@@ -69,13 +70,33 @@ func main() {
 	}
 	priceProvider := price.NewCachedQuoteProvider(upstreamPriceProvider, cacheStore, cfg.PriceCacheTTL)
 	priceService := price.NewService(priceProvider)
-	syncer := scheduler.NewPoolSyncer(reader, repo, cfg.ChainID, priceService, cfg.PriceSymbol, logger)
+
+	var liquidationService *liquidation.Service
+	if cfg.LiquidationEnabled {
+		liquidationChain, err := liquidation.NewRPCChain(
+			ctx,
+			cfg.ChainRPCURL,
+			cfg.PoolAddress,
+			cfg.ChainID,
+			cfg.LiquidationKey,
+			cfg.LiquidationSlippageBPS,
+		)
+		if err != nil {
+			logger.Error("configure liquidation keeper failed", slog.Any("error", err))
+			os.Exit(1)
+		}
+		defer liquidationChain.Close()
+		liquidationService = liquidation.NewService(liquidationChain, logger)
+	}
+	syncer := scheduler.NewPoolSyncer(reader, repo, cfg.ChainID, priceService, cfg.PriceSymbol, liquidationService, logger)
 
 	logger.Info(
 		"scheduler starting",
 		slog.String("chainID", cfg.ChainID),
 		slog.Duration("interval", cfg.SyncInterval),
 		slog.String("priceSymbol", cfg.PriceSymbol),
+		slog.Bool("liquidationEnabled", cfg.LiquidationEnabled),
+		slog.Uint64("liquidationSlippageBPS", cfg.LiquidationSlippageBPS),
 	)
 
 	if err := syncer.Run(ctx, cfg.SyncInterval); err != nil {

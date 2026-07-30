@@ -2,12 +2,13 @@
 
 This Terraform stack creates the production AWS baseline: a two-AZ VPC, public HTTPS Application Load Balancer, private ECS/Fargate API and scheduler, private Multi-AZ RDS MySQL, encrypted ElastiCache Redis, Route 53 DNS, ACM TLS, CloudWatch logs, IAM task roles, API autoscaling, and a one-shot migration task definition.
 
-Before planning, create two Secrets Manager secrets containing raw string values (not JSON):
+Before planning, create two Secrets Manager secrets containing raw string values (not JSON), plus a third when automatic liquidation is enabled:
 
 - the Ethereum RPC URL;
-- the Redis AUTH token, with at least 16 characters.
+- the Redis AUTH token, with at least 16 characters;
+- the dedicated liquidation keeper private key when `liquidation_enabled=true`.
 
-Put only their ARNs in `terraform.tfvars`. RDS generates its own master password in a separate AWS-managed secret. The ECS execution role can read only these three runtime secrets, and ECS injects them when each task starts. Terraform must read the Redis token to configure ElastiCache, so that value is also protected by the encrypted remote Terraform state.
+Put only their ARNs in `terraform.tfvars`. RDS generates its own master password in a separate AWS-managed secret. ECS injects the liquidation key only into the scheduler task and only when liquidation is enabled. Terraform must read the Redis token to configure ElastiCache, so that value is also protected by the encrypted remote Terraform state.
 
 ## Redis authentication flow
 

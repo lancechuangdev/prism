@@ -50,6 +50,34 @@ variable "chain_rpc_url_secret_arn" {
   type        = string
 }
 
+variable "liquidation_enabled" {
+  description = "Enable scheduler monitoring and automatic liquidation transactions."
+  type        = bool
+  default     = false
+}
+
+variable "liquidation_private_key_secret_arn" {
+  description = "Secrets Manager ARN containing the dedicated authorized liquidation keeper key."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !var.liquidation_enabled || length(trimspace(var.liquidation_private_key_secret_arn)) > 0
+    error_message = "liquidation_private_key_secret_arn is required when liquidation_enabled is true."
+  }
+}
+
+variable "liquidation_slippage_bps" {
+  description = "Maximum DEX input slippage above the current liquidation quote, in basis points."
+  type        = number
+  default     = 100
+
+  validation {
+    condition     = var.liquidation_slippage_bps >= 0 && var.liquidation_slippage_bps <= 10000
+    error_message = "liquidation_slippage_bps must be between 0 and 10000."
+  }
+}
+
 variable "pool_address" {
   description = "PrismPool address from the verified deployment manifest."
   type        = string

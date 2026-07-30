@@ -485,6 +485,9 @@ Do not use the Compose credentials or token secret in a public environment.
 | `PRISM_POOL_ADDRESS` | empty | Required deployed `PrismPool` contract address. |
 | `PRISM_MULTISIG_ADDRESS` | empty | Required deployed `ThresholdMultiSig` contract address. |
 | `PRISM_SYNC_INTERVAL` | `2m` | Scheduler synchronization interval. |
+| `PRISM_LIQUIDATION_ENABLED` | `false` | Enable scheduler monitoring and automatic liquidation. |
+| `PRISM_LIQUIDATION_PRIVATE_KEY` | empty | Dedicated keeper key authorized by `PrismPool`; scheduler-only secret. |
+| `PRISM_LIQUIDATION_SLIPPAGE_BPS` | `100` | Maximum DEX input slippage above the current quote. |
 | `PRISM_STORE` | `memory` | Repository driver: `memory` or `mysql`. |
 | `PRISM_MYSQL_DSN` | empty | MySQL connection string. |
 | `PRISM_MYSQL_HOST` | empty | MySQL host used when `PRISM_MYSQL_DSN` is not set. |

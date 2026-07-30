@@ -433,6 +433,8 @@ export REDIS_SECRET_ARN="$(
 
 Store the generated Redis value in an approved credential manager before clearing the shell.
 
+To enable automatic liquidation, create a separate low-balance keeper wallet, store its private key as a raw Secrets Manager value, set `liquidation_enabled=true` and `liquidation_private_key_secret_arn` in Terraform, and have the existing multisig execute `PrismPool.setLiquidator(keeperAddress)`. Apply infrastructure only after the on-chain authorization is confirmed. The keeper key is injected only into the scheduler task.
+
 ## 5. Build and push the backend image
 
 Create the ECR repository once:
@@ -511,6 +513,9 @@ price_token_addresses = {
   USDC = "0x..."
   WETH = "0x..."
 }
+liquidation_enabled                = true
+liquidation_private_key_secret_arn = "arn:aws:secretsmanager:..."
+liquidation_slippage_bps            = 100
 
 chain_rpc_url_secret_arn    = "arn:aws:secretsmanager:..."
 redis_auth_token_secret_arn = "arn:aws:secretsmanager:..."

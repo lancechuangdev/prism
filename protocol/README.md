@@ -112,6 +112,12 @@ The script refuses non-Sepolia RPC networks, validates the separately controlled
 Commit or upload this manifest as a deployment artifact so stdout or an operator's shell history is not the source of truth. Configure every swap direction used by repayment or liquidation.
 This is a testnet integration path, not a claim that Prism's own contracts have received a security audit.
 
+### Authorize an automatic liquidation keeper
+
+`PrismPool.liquidate` can be called by the multisig owner or by one dedicated address configured through `setLiquidator(address)`. The keeper has no pool-administration authority. Because the Sepolia pool is owned by `ThresholdMultiSig`, authorize, replace, or revoke the keeper only through the normal multisig approval and execution flow. The target is the deployed `PrismPool`, the value is zero, and the inner calldata is `PrismPool.interface.encodeFunctionData("setLiquidator", [keeperAddress])`; use `ethers.ZeroAddress` to revoke it. Do not enable the backend scheduler until the multisig transaction has executed and `pool.liquidator()` equals the scheduler signer address.
+
+An older `PrismPool` deployed before `setLiquidator` was added cannot use the automatic keeper and must be redeployed from the current contract source. Do not transfer pool ownership from the multisig to the scheduler as a workaround.
+
 Before configuring a backend from the manifest, verify its identity:
 
 ```bash

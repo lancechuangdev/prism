@@ -243,6 +243,30 @@ describe("PrismPool liquidation", function () {
     );
     await expect(
       pool.connect(alice).liquidate(0, ethers.parseEther("1")),
+    ).to.be.revertedWith("Not authorized to liquidate");
+  });
+
+  it("allows the owner to authorize a dedicated liquidation keeper", async function () {
+    await createActivePool();
+    await oracle.setPrice(
+      await collateralToken.getAddress(),
+      COLLATERAL_CRASH_PRICE,
+    );
+
+    await expect(pool.setLiquidator(alice.address))
+      .to.emit(pool, "LiquidatorChanged")
+      .withArgs(ethers.ZeroAddress, alice.address);
+
+    await expect(
+      pool.connect(alice).liquidate(0, ethers.parseEther("1")),
+    ).to.emit(pool, "PoolLiquidated");
+  });
+
+  it("does not let the liquidation keeper change its authorization", async function () {
+    await pool.setLiquidator(alice.address);
+
+    await expect(
+      pool.connect(alice).setLiquidator(bob.address),
     ).to.be.revertedWith("Not the owner");
   });
 

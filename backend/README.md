@@ -378,6 +378,20 @@ The public price endpoint retains the same response shape:
 
 `ChainlinkOracle` already rejects non-positive, incomplete, future-dated, and stale feed rounds and returns an 18-decimal normalized USD price. Reading it through RPC does not submit a transaction or consume gas, though it counts against the configured RPC provider's request limits.
 
+### Automatic liquidation keeper
+
+Automatic liquidation is disabled by default. When enabled, each scheduler cycle asks `PrismPool.isUndercollateralized(poolId)` for every pool. For each unsafe active pool, it obtains the current DEX input quote, applies the configured slippage allowance, caps the transaction at the pool's settled collateral, submits `liquidate`, and waits for a successful receipt.
+
+```text
+PRISM_LIQUIDATION_ENABLED=true
+PRISM_LIQUIDATION_PRIVATE_KEY=0x...
+PRISM_LIQUIDATION_SLIPPAGE_BPS=100
+```
+
+The key must belong to a dedicated, minimally funded keeper address that the `PrismPool` owner has authorized with `setLiquidator`. Startup fails if the configured signer is not the on-chain liquidator. The keeper can call only the liquidation path; the multisig retains ownership and can replace or revoke it by setting another address or the zero address. Store the key in a secrets manager, never in source control or Terraform variables.
+
+The scheduler does not calculate collateral health from its cached HTTP price. The contract performs the authoritative check against its configured `ChainlinkOracle` in the same transaction, preventing a stale backend decision from forcing liquidation.
+
 Run either process with Redis cache:
 
 ```bash

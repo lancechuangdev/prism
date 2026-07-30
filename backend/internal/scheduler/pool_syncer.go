@@ -11,7 +11,11 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
 
-const syncDeadline = 30 * time.Second
+const syncDeadline = 2 * time.Minute
+
+type LiquidationChecker interface {
+	CheckAndLiquidate(ctx context.Context) error
+}
 
 type PoolSyncer struct {
 	reader       chain.Reader
@@ -19,16 +23,18 @@ type PoolSyncer struct {
 	chainID      string
 	priceService *price.Service
 	symbol       string
+	liquidations LiquidationChecker
 	logger       *slog.Logger
 }
 
-func NewPoolSyncer(reader chain.Reader, repo store.Repository, chainID string, priceService *price.Service, symbol string, logger *slog.Logger) *PoolSyncer {
+func NewPoolSyncer(reader chain.Reader, repo store.Repository, chainID string, priceService *price.Service, symbol string, liquidations LiquidationChecker, logger *slog.Logger) *PoolSyncer {
 	return &PoolSyncer{
 		reader:       reader,
 		repo:         repo,
 		chainID:      chainID,
 		priceService: priceService,
 		symbol:       symbol,
+		liquidations: liquidations,
 		logger:       logger,
 	}
 }
@@ -83,6 +89,17 @@ func (s *PoolSyncer) RunOnce(ctx context.Context) error {
 			slog.String("price", quote.Price),
 			slog.String("source", quote.Source),
 		)
+	}
+
+	if s.liquidations != nil {
+		if err := s.liquidations.CheckAndLiquidate(ctx); err != nil {
+			s.logger.Error(
+				"liquidation check failed",
+				slog.String("event", "liquidation_failure"),
+				slog.Any("error", err),
+			)
+			return fmt.Errorf("check liquidations: %w", err)
+		}
 	}
 
 	s.logger.Info(

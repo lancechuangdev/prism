@@ -38,11 +38,20 @@ locals {
     { name = "PRISM_REDIS_PASSWORD", valueFrom = var.redis_auth_token_secret_arn }
   ]
 
-  runtime_secret_arns = [
+  scheduler_environment = concat(local.common_environment, [
+    { name = "PRISM_LIQUIDATION_ENABLED", value = tostring(var.liquidation_enabled) },
+    { name = "PRISM_LIQUIDATION_SLIPPAGE_BPS", value = tostring(var.liquidation_slippage_bps) }
+  ])
+
+  scheduler_secrets = concat(local.common_secrets, var.liquidation_enabled ? [
+    { name = "PRISM_LIQUIDATION_PRIVATE_KEY", valueFrom = var.liquidation_private_key_secret_arn }
+  ] : [])
+
+  runtime_secret_arns = concat([
     var.chain_rpc_url_secret_arn,
     aws_db_instance.main.master_user_secret[0].secret_arn,
     var.redis_auth_token_secret_arn
-  ]
+  ], var.liquidation_enabled ? [var.liquidation_private_key_secret_arn] : [])
 }
 
 resource "aws_vpc" "main" {
@@ -412,8 +421,8 @@ resource "aws_ecs_task_definition" "scheduler" {
     image       = var.image_uri
     essential   = true
     command     = ["/app/scheduler"]
-    environment = local.common_environment
-    secrets     = local.common_secrets
+    environment = local.scheduler_environment
+    secrets     = local.scheduler_secrets
     logConfiguration = {
       logDriver = "awslogs"
       options = {

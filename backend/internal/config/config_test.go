@@ -127,6 +127,20 @@ func TestValidateProductionSchedulerDoesNotRequireAPISecrets(t *testing.T) {
 	}
 }
 
+func TestValidateSchedulerRequiresKeyWhenLiquidationEnabled(t *testing.T) {
+	cfg := Config{StoreDriver: "memory", LiquidationEnabled: true}
+
+	err := cfg.Validate(ComponentScheduler)
+	if err == nil || !strings.Contains(err.Error(), "PRISM_LIQUIDATION_PRIVATE_KEY") {
+		t.Fatalf("expected missing liquidation key error, got %v", err)
+	}
+
+	cfg.LiquidationKey = "test-only-key"
+	if err := cfg.Validate(ComponentScheduler); err != nil {
+		t.Fatalf("valid local liquidation configuration: %v", err)
+	}
+}
+
 func TestValidateMigrationOnlyRequiresMySQL(t *testing.T) {
 	cfg := Config{
 		Env:         "production",

@@ -114,6 +114,7 @@ contract PrismPool {
     }
 
     address public owner;
+    address public liquidator;
     address public oracle;
     address public dexSwap;
     address payable public feeAddress;
@@ -127,6 +128,7 @@ contract PrismPool {
     mapping(address => mapping(uint256 => BorrowInfo)) public userBorrowInfo; // user => poolId => BorrowInfo
 
     event OwnerChanged(address indexed oldOwner, address indexed newOwner);
+    event LiquidatorChanged(address indexed oldLiquidator, address indexed newLiquidator);
     event PoolCreated(
         uint256 indexed poolId,
         address indexed lendToken,
@@ -173,6 +175,11 @@ contract PrismPool {
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not the owner");
+        _;
+    }
+
+    modifier onlyOwnerOrLiquidator() {
+        require(msg.sender == owner || msg.sender == liquidator, "Not authorized to liquidate");
         _;
     }
 
@@ -226,6 +233,11 @@ contract PrismPool {
         emit OwnerChanged(address(0), owner);
         emit DexSwapChanged(address(0), dexSwap);
         emit FeeAddressChanged(address(0), feeAddress);
+    }
+
+    function setLiquidator(address newLiquidator) external onlyOwner {
+        emit LiquidatorChanged(liquidator, newLiquidator);
+        liquidator = newLiquidator;
     }
 
     function createPool(CreatePoolParams calldata params) external onlyOwner returns (uint256 poolId) {
@@ -608,7 +620,7 @@ contract PrismPool {
 
     function liquidate(uint256 poolId, uint256 maxCollateralAmount)
         external
-        onlyOwner
+        onlyOwnerOrLiquidator
         whenNotPaused
         isState(poolId, PoolState.ACTIVE)
     {

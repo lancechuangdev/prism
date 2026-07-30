@@ -11,13 +11,23 @@ import (
 	"github.com/lancechuangdev/prism/backend/internal/store"
 )
 
+type fakeLiquidationChecker struct {
+	called bool
+}
+
+func (f *fakeLiquidationChecker) CheckAndLiquidate(context.Context) error {
+	f.called = true
+	return nil
+}
+
 func TestPoolSyncerRunOnce(t *testing.T) {
 	ctx := context.Background()
 	repo := store.NewMemoryStore()
 	reader := chain.NewFakeReader()
 	prices := price.NewService(price.NewLocalQuoteProvider())
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	syncer := NewPoolSyncer(reader, repo, "31337", prices, "PRM", logger)
+	liquidations := &fakeLiquidationChecker{}
+	syncer := NewPoolSyncer(reader, repo, "31337", prices, "PRM", liquidations, logger)
 
 	if err := syncer.RunOnce(ctx); err != nil {
 		t.Fatalf("run once: %v", err)
@@ -37,5 +47,8 @@ func TestPoolSyncerRunOnce(t *testing.T) {
 	}
 	if len(tokens) != 2 {
 		t.Fatalf("expected two synced tokens, got %d", len(tokens))
+	}
+	if !liquidations.called {
+		t.Fatal("expected liquidation checker to run")
 	}
 }
