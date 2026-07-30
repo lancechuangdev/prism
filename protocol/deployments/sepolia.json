@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "environment": "production",
+  "network": "sepolia",
+  "chainId": "11155111",
+  "deployedAt": "2026-07-30T19:35:50.228Z",
+  "deploymentBlock": 11384520,
+  "deployer": "0x49e609cd38fa292Bc02D6d0F196Bec9fd07DA3bf",
+  "multisig": "0xddE278CFAF239aFe6336A373Eb978F81979261ee",
+  "multisigOwners": [
+    "0x119938494Febb31C3946Ca23281261c0545091De",
+    "0x49e609cd38fa292Bc02D6d0F196Bec9fd07DA3bf",
+    "0x7893Bc7aDfd40b90Add55Fb8ED405a3A96a06Fdf"
+  ],
+  "multisigThreshold": "2",
+  "feeAddress": "0x119938494Febb31C3946Ca23281261c0545091De",
+  "chainlinkOracle": "0x9E028Db536A2597B8746029452dA645983caf30B",
+  "uniswapV3SwapAdapter": "0x47a2220DAF4877E8aAf81c6D4f933BDE348CBE9d",
+  "uniswapV3Router": "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
+  "uniswapV3Quoter": "0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3",
+  "prismPool": "0xC9057b9aa31C0e7174c4943fBeC32EFa7A859Cc6",
+  "feeds": [
+    {
+      "token": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "feed": "0xA2F78ab2355fe2f984D808B5CeE7FD0A93D5270E",
+      "maxStaleness": 86400
+    },
+    {
+      "token": "0xfff9976782d46cc05630d1f6ebab18b2324d6b14",
+      "feed": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
+      "maxStaleness": 86400
+    }
+  ],
+  "feedChecks": [
+    {
+      "token": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "tokenSymbol": "USDC",
+      "tokenDecimals": 6,
+      "feed": "0xA2F78ab2355fe2f984D808B5CeE7FD0A93D5270E",
+      "feedDescription": "USDC / USD",
+      "feedDecimals": 8,
+      "latestAnswer": "99975867",
+      "updatedAt": 1785354036
+    },
+    {
+      "token": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+      "tokenSymbol": "WETH",
+      "tokenDecimals": 18,
+      "feed": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
+      "feedDescription": "ETH / USD",
+      "feedDecimals": 8,
+      "latestAnswer": "191573000000",
+      "updatedAt": 1785437376
+    }
+  ],
+  "pools": [
+    {
+      "tokenIn": "0xfff9976782d46cc05630d1f6ebab18b2324d6b14",
+      "tokenOut": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "fee": 3000
+    },
+    {
+      "tokenIn": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "tokenOut": "0xfff9976782d46cc05630d1f6ebab18b2324d6b14",
+      "fee": 3000
+    }
+  ]
+}

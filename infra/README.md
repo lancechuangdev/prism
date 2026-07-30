@@ -291,7 +291,8 @@ export AWS_ACCOUNT_ID="$(
 Before starting, obtain or create:
 
 - a funded Sepolia deployment wallet;
-- a deployed Prism `ThresholdMultiSig` with separately controlled owners;
+- separately controlled owner addresses and a reviewed threshold for the Prism
+  `ThresholdMultiSig`;
 - Sepolia ERC-20 tokens, compatible Chainlink token/USD feeds, and liquid direct Uniswap V3 pools;
 - the current Sepolia Uniswap V3 `SwapRouter02` and `QuoterV2` addresses;
 - an HTTPS backend quote provider and bearer token;
@@ -300,7 +301,7 @@ Before starting, obtain or create:
 - a private ECR repository;
 - a protected S3 Terraform-state bucket and the state-locking configuration expected by `terraform/backend.hcl.example`.
 
-The repository does not currently create the Sepolia multisig, quote provider, Cognito resources, ECR repository, or remote-state backend.
+The repository does not currently create the quote provider, Cognito resources, ECR repository, or remote-state backend. The Sepolia protocol deployment creates the Prism multisig.
 
 ## 1. Test the protocol
 
@@ -317,7 +318,8 @@ Keep private values in the current shell or a secure secret manager:
 ```bash
 export SEPOLIA_RPC_URL="https://..."
 export SEPOLIA_PRIVATE_KEY="0x..."
-export PRISM_MULTISIG_ADDRESS="0x..."
+export PRISM_MULTISIG_OWNERS='["0xOWNER_1","0xOWNER_2","0xOWNER_3"]'
+export PRISM_MULTISIG_THRESHOLD="2"
 export PRISM_FEE_ADDRESS="0x..."
 export PRISM_UNISWAP_V3_ROUTER="0x..."
 export PRISM_UNISWAP_V3_QUOTER="0x..."
@@ -370,7 +372,7 @@ cd /home/boris-alienware/projects/prism/protocol
 npm run deploy:sepolia
 ```
 
-The deployment refuses a non-Sepolia RPC, verifies configured contract bytecode, tests the configured Chainlink feeds, transfers oracle and adapter ownership to the multisig, deploys `PrismPool`, and writes `deployments/sepolia.json`.
+The deployment refuses a non-Sepolia RPC, deploys `ThresholdMultiSig` with the configured owners and threshold, verifies configured dependency bytecode, tests the configured Chainlink feeds, transfers oracle and adapter ownership to the multisig, deploys `PrismPool`, and writes `deployments/sepolia.json`.
 
 Verify the generated manifest:
 
