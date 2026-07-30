@@ -14,10 +14,10 @@ The protocol and backend are connected through Ethereum RPC at runtime.
 - A local deployment script deploys the protocol, configures its mock dependencies, and creates one seed pool on a persistent Hardhat node.
 - The backend has an RPC implementation of `chain.Reader` backed by generated Go bindings. It reads `poolCount`, pool snapshots, pool data, and ERC-20 `symbol` and `decimals`.
 - Both backend executables instantiate `RPCReader` from the configured RPC URL and deployed `PrismPool` address. `FakeReader` is used only by tests.
-- Local backend prices come from `LocalQuoteProvider`, wrapped by a Redis-backed `CachedQuoteProvider`.
+- Local backend prices come from `LocalQuoteProvider`; production prices are gasless reads from the deployed `ChainlinkOracle`. Both are wrapped by a Redis-backed `CachedQuoteProvider`.
 - Sepolia deployments can use `ChainlinkOracle` and `UniswapV3SwapAdapter`; the deployment validates the network and configured contract bytecode before transferring adapter ownership to the multisig.
 
-Production use still requires durable deployment addresses, a real backend quote provider, and a security review of Prism's contracts and adapter configuration.
+Production use still requires durable deployment addresses and a security review of Prism's contracts, oracle feeds, and adapter configuration.
 
 ## System architecture
 
@@ -46,8 +46,8 @@ flowchart LR
   Repository --> MySQL[(MySQL)]
   APICachedPrice <--> Redis[(Redis)]
   SchedulerCachedPrice <--> Redis
-  APICachedPrice --> DemoPrice[External token price provider]
-  SchedulerCachedPrice --> DemoPrice
+  APICachedPrice --> ChainlinkPrice[Deployed ChainlinkOracle]
+  SchedulerCachedPrice --> ChainlinkPrice
   Pool -->|RPCReader| Sync
 ```
 
@@ -198,6 +198,14 @@ jq '.abi' \
 jq '.abi' \
   protocol/artifacts/contracts/admin/ThresholdMultiSig.sol/ThresholdMultiSig.json \
   > protocol/contracts/admin/ThresholdMultiSig.abi.json
+
+jq '.abi' \
+  protocol/artifacts/contracts/oracle/ChainlinkOracle.sol/ChainlinkOracle.json \
+  > protocol/contracts/oracle/ChainlinkOracle.abi.json
+
+jq '.abi' \
+  protocol/artifacts/contracts/oracle/ChainlinkOracle.sol/IChainlinkAggregatorV3.json \
+  > protocol/contracts/oracle/IChainlinkAggregatorV3.abi.json
 ```
 
 #### 3. Regenerate and verify the Go contract bindings
@@ -217,9 +225,23 @@ abigen \
   --type ThresholdMultiSig \
   --out backend/internal/contracts/threshold_multi_sig.go
 
+abigen \
+  --abi protocol/contracts/oracle/ChainlinkOracle.abi.json \
+  --pkg contracts \
+  --type ChainlinkOracle \
+  --out backend/internal/contracts/chainlink_oracle.go
+
+abigen \
+  --abi protocol/contracts/oracle/IChainlinkAggregatorV3.abi.json \
+  --pkg contracts \
+  --type ChainlinkAggregatorV3 \
+  --out backend/internal/contracts/chainlink_aggregator_v3.go
+
 gofmt -w \
   backend/internal/contracts/prism_pool.go \
-  backend/internal/contracts/threshold_multi_sig.go
+  backend/internal/contracts/threshold_multi_sig.go \
+  backend/internal/contracts/chainlink_oracle.go \
+  backend/internal/contracts/chainlink_aggregator_v3.go
 
 cd backend
 go test ./...
@@ -476,16 +498,16 @@ Do not use the Compose credentials or token secret in a public environment.
 | `PRISM_REDIS_TLS` | `false` | Enable verified Redis TLS; required when `PRISM_ENV=production`. |
 | `PRISM_REDIS_TLS_SERVER_NAME` | derived from address | Optional certificate server-name override. |
 | `PRISM_PRICE_SYMBOL` | `PRM` | Symbol refreshed by the scheduler. |
-| `PRISM_PRICE_PROVIDER` | `local` | Price adapter: `local` for development or `http`; production rejects `local`. |
-| `PRISM_PRICE_PROVIDER_URL` | empty | HTTPS quote endpoint used by the `http` provider. |
-| `PRISM_PRICE_PROVIDER_TOKEN` | empty | Optional bearer token for the HTTP quote provider. |
+| `PRISM_PRICE_PROVIDER` | `local` | Price adapter: `local` for development or `chainlink`; production requires `chainlink`. |
+| `PRISM_ORACLE_ADDRESS` | empty | Deployed `ChainlinkOracle` address; required in production. |
+| `PRISM_PRICE_TOKEN_ADDRESSES` | empty | JSON object mapping price symbols to oracle-configured ERC-20 addresses. |
 | `PRISM_PRICE_CACHE_TTL` | `30s` | Price-cache lifetime. |
 | `PRISM_ADMIN_USERNAME` | `admin` | Development admin username. |
 | `PRISM_ADMIN_PASSWORD` | `password` | Development admin password. |
 | `PRISM_TOKEN_SECRET` | `local-development-secret` | HMAC token-signing secret. |
 | `PRISM_TOKEN_TTL` | `1h` | Authentication token lifetime. |
 
-When `PRISM_ENV=production`, startup fails unless persistent MySQL, verified Redis TLS, an HTTPS quote provider, and deployed contract addresses are configured. The API additionally rejects the development admin credentials and requires an admin password of at least 12 characters and a token secret of at least 32 characters. Validation is role-aware, so the scheduler does not require API authentication settings and the one-shot migration command only requires MySQL. The API also sets bounded HTTP read, write, idle, and header limits for operation behind a load balancer.
+When `PRISM_ENV=production`, startup fails unless persistent MySQL, verified Redis TLS, the deployed `ChainlinkOracle`, its symbol-to-token mapping, and deployed contract addresses are configured. The API additionally rejects the development admin credentials and requires an admin password of at least 12 characters and a token secret of at least 32 characters. Validation is role-aware, so the scheduler does not require API authentication settings and the one-shot migration command only requires MySQL. The API also sets bounded HTTP read, write, idle, and header limits for operation behind a load balancer.
 
 See [`backend/README.md`](./backend/README.md) for endpoint payloads, storage
 details, and the backend's implementation history.

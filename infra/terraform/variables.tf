@@ -70,19 +70,33 @@ variable "multisig_address" {
   }
 }
 
-variable "price_provider_url" {
-  description = "HTTPS quote-provider endpoint."
+variable "oracle_address" {
+  description = "ChainlinkOracle address from the verified deployment manifest."
   type        = string
 
   validation {
-    condition     = startswith(lower(var.price_provider_url), "https://")
-    error_message = "price_provider_url must use HTTPS."
+    condition     = can(regex("^0x[0-9a-fA-F]{40}$", var.oracle_address))
+    error_message = "oracle_address must be a 20-byte hexadecimal EVM address."
   }
 }
 
-variable "price_provider_token_secret_arn" {
-  description = "Secrets Manager ARN whose value is the quote-provider bearer token."
+variable "price_symbol" {
+  description = "Token symbol refreshed by the scheduler."
   type        = string
+  default     = "WETH"
+}
+
+variable "price_token_addresses" {
+  description = "Map of symbols to ERC-20 addresses configured in ChainlinkOracle."
+  type        = map(string)
+
+  validation {
+    condition = length(var.price_token_addresses) > 0 && alltrue([
+      for symbol, address in var.price_token_addresses :
+      length(trimspace(symbol)) > 0 && can(regex("^0x[0-9a-fA-F]{40}$", address))
+    ])
+    error_message = "price_token_addresses must map non-empty symbols to 20-byte hexadecimal EVM addresses."
+  }
 }
 
 variable "cognito_region" {

@@ -68,9 +68,9 @@ func (s *PoolSyncer) RunOnce(ctx context.Context) error {
 		quote, err := s.priceService.Latest(ctx, s.symbol)
 		if err != nil {
 			s.logger.Error(
-				"quote provider refresh failed",
+				"price provider refresh failed",
 				slog.String("event", "provider_failure"),
-				slog.String("provider", "quote"),
+				slog.String("provider", "chainlink_oracle"),
 				slog.String("symbol", s.symbol),
 				slog.Any("error", err),
 			)

@@ -38,8 +38,7 @@ flowchart TB
         Migration["One-shot migration task"]
     end
 
-    RPC["Sepolia RPC provider"]
-    Quotes["Quote provider"]
+    RPC["Sepolia RPC provider<br/>pool and ChainlinkOracle reads"]
 
     Client --> DNS --> ALB
     Certificate -. "certificate" .-> ALB
@@ -60,8 +59,7 @@ flowchart TB
 
     API1 --> NAT1 --> RPC
     API2 --> NAT2 --> RPC
-    NAT1 --> Quotes
-    NAT2 --> Quotes
+    Scheduler --> NAT1
 
     API1 --> Logs
     API2 --> Logs
@@ -85,7 +83,7 @@ Multi-AZ is an availability feature, not a complete disaster-recovery strategy. 
 
 ### Private outbound traffic and NAT gateways
 
-The private ECS tasks still need outbound access to the Sepolia RPC and HTTPS quote providers. Their route tables send that traffic through NAT gateways in the public subnets. A NAT gateway substitutes its public address for the task's private address and permits response traffic, but it does not make the task directly reachable by unrelated internet clients.
+The private ECS tasks still need outbound access to the Sepolia RPC, which is also used for gasless `ChainlinkOracle` price reads. Their route tables send that traffic through NAT gateways in the public subnets. A NAT gateway substitutes its public address for the task's private address and permits response traffic, but it does not make the task directly reachable by unrelated internet clients.
 
 The stack creates one NAT gateway per AZ so both zones do not depend on a gateway in one zone. NAT gateways have hourly and data-processing costs. Traffic to RDS and Redis stays inside the VPC.
 
@@ -127,7 +125,7 @@ variable "chain_id" {
 chain_id = "11155111"
 ```
 
-The real `terraform.tfvars` is ignored by Git. Runtime RPC, Redis, quote-provider, and database credentials are not stored there directly. It contains Secrets Manager ARNs; ECS retrieves the authorized values when tasks start. RDS generates its master password.
+The real `terraform.tfvars` is ignored by Git. Runtime RPC, Redis, and database credentials are not stored there directly. It contains Secrets Manager ARNs; ECS retrieves the authorized values when tasks start. RDS generates its master password. Public contract and token addresses remain ordinary Terraform variables.
 
 Redis is different because Terraform must give the token to ElastiCache while configuring the server. Consequently, that secret can appear in Terraform state even though normal plan output redacts it.
 
@@ -291,17 +289,15 @@ export AWS_ACCOUNT_ID="$(
 Before starting, obtain or create:
 
 - a funded Sepolia deployment wallet;
-- separately controlled owner addresses and a reviewed threshold for the Prism
-  `ThresholdMultiSig`;
+- separately controlled owner addresses and a reviewed threshold for the Prism `ThresholdMultiSig`;
 - Sepolia ERC-20 tokens, compatible Chainlink token/USD feeds, and liquid direct Uniswap V3 pools;
 - the current Sepolia Uniswap V3 `SwapRouter02` and `QuoterV2` addresses;
-- an HTTPS backend quote provider and bearer token;
 - a Cognito User Pool, resource-server scopes, and app client;
 - a Route 53 public hosted zone and desired API hostname;
 - a private ECR repository;
 - a protected S3 Terraform-state bucket and the state-locking configuration expected by `terraform/backend.hcl.example`.
 
-The repository does not currently create the quote provider, Cognito resources, ECR repository, or remote-state backend. The Sepolia protocol deployment creates the Prism multisig.
+The repository does not currently create the Cognito resources, ECR repository, or remote-state backend. The Sepolia protocol deployment creates the Prism multisig and Chainlink oracle used by the backend price service.
 
 ## 1. Test the protocol
 
@@ -385,7 +381,8 @@ jq -e '
   .network == "sepolia" and
   .chainId == "11155111" and
   (.prismPool | test("^0x[0-9a-fA-F]{40}$")) and
-  (.multisig | test("^0x[0-9a-fA-F]{40}$"))
+  (.multisig | test("^0x[0-9a-fA-F]{40}$")) and
+  (.chainlinkOracle | test("^0x[0-9a-fA-F]{40}$"))
 ' protocol/deployments/sepolia.json
 
 export PRISM_POOL_ADDRESS="$(
@@ -393,6 +390,16 @@ export PRISM_POOL_ADDRESS="$(
 )"
 export PRISM_MULTISIG_ADDRESS="$(
   jq -r '.multisig' protocol/deployments/sepolia.json
+)"
+export PRISM_ORACLE_ADDRESS="$(
+  jq -r '.chainlinkOracle' protocol/deployments/sepolia.json
+)"
+export PRISM_PRICE_TOKEN_ADDRESSES="$(
+  jq -c '
+    .feedChecks
+    | map({key: .tokenSymbol, value: .token})
+    | from_entries
+  ' protocol/deployments/sepolia.json
 )"
 ```
 
@@ -422,17 +429,6 @@ export REDIS_SECRET_ARN="$(
     --output text
 )"
 
-read -rsp "Quote-provider token: " QUOTE_PROVIDER_TOKEN
-echo
-export QUOTE_SECRET_ARN="$(
-  aws secretsmanager create-secret \
-    --region "$AWS_REGION" \
-    --name prism/production/quote-token \
-    --secret-string "$QUOTE_PROVIDER_TOKEN" \
-    --query ARN \
-    --output text
-)"
-unset QUOTE_PROVIDER_TOKEN
 ```
 
 Store the generated Redis value in an approved credential manager before clearing the shell.
@@ -509,11 +505,15 @@ route53_zone_id = "Z..."
 chain_id         = "11155111"
 pool_address     = "0x..."
 multisig_address = "0x..."
+oracle_address   = "0x..."
+price_symbol     = "WETH"
+price_token_addresses = {
+  USDC = "0x..."
+  WETH = "0x..."
+}
 
-chain_rpc_url_secret_arn        = "arn:aws:secretsmanager:..."
-redis_auth_token_secret_arn     = "arn:aws:secretsmanager:..."
-price_provider_token_secret_arn = "arn:aws:secretsmanager:..."
-price_provider_url              = "https://quotes.example.com"
+chain_rpc_url_secret_arn    = "arn:aws:secretsmanager:..."
+redis_auth_token_secret_arn = "arn:aws:secretsmanager:..."
 
 db_username = "prism"
 
@@ -601,3 +601,40 @@ Verify all of the following:
 - the CloudWatch alarms are not unexpectedly firing.
 
 Do not create a production pool until its token contracts, oracle feeds, maximum staleness, Uniswap pool liquidity, position-token isolation, multisig owners, and threshold have all been reviewed.
+
+## TODO: Harden deployment-key management
+
+The current Hardhat configuration accepts `SEPOLIA_PRIVATE_KEY` as a configuration variable. Do not keep a plaintext private key in a committed file, shell script, command history, CI log, or shared chat.
+
+For local Sepolia deployments, migrate the RPC URL and dedicated, low-balance deployment key from plaintext environment variables to Hardhat's encrypted keystore:
+
+```bash
+cd /home/boris-alienware/projects/prism/protocol
+
+npx hardhat keystore set SEPOLIA_PRIVATE_KEY
+npx hardhat keystore set SEPOLIA_RPC_URL
+
+unset SEPOLIA_PRIVATE_KEY
+unset SEPOLIA_RPC_URL
+
+npx hardhat keystore list
+npx hardhat keystore path
+npm run deploy:sepolia
+```
+
+Store the keystore backup and its password separately. Use a deployment-only wallet with enough Sepolia ETH for deployment, no mainnet assets, and no long-term administrative role. Keep multisig owner keys on separately controlled devices, preferably hardware wallets. After deployment, verify that `PrismPool`, `ChainlinkOracle`, and `UniswapV3SwapAdapter` are controlled by the multisig.
+
+Before supporting mainnet deployment:
+
+- replace the exportable raw-key signer with a non-exportable hardware wallet, HSM, cloud KMS, or institutional signing service;
+- if AWS is selected, use an `ECC_SECG_P256K1` signing key and restrict its IAM policy to the deployment role and required signing operations;
+- use GitHub Actions OIDC for short-lived AWS access instead of long-lived AWS credentials in GitHub Secrets;
+- protect the deployment environment with branch restrictions, required manual approval, least-privilege permissions, and audited deployment logs;
+- keep the deployer minimally funded and transfer all lasting protocol control to the reviewed multisig;
+- document backup, recovery, compromise response, owner replacement, and key rotation procedures before the first production transaction.
+
+References:
+
+- [Hardhat configuration variables and encrypted keystore](https://blog.nomic.foundation/how-to-manage-config-values-and-secrets-safely-in-hardhat-3/)
+- [AWS KMS secp256k1 signing keys](https://docs.aws.amazon.com/kms/latest/developerguide/symm-asymm-choose-key-spec.html)
+- [GitHub Actions OIDC with AWS](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws)

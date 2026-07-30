@@ -51,10 +51,20 @@ func main() {
 	defer reader.Close()
 
 	upstreamPriceProvider, err := price.NewConfiguredQuoteProvider(
-		cfg.Env, cfg.PriceProvider, cfg.PriceProviderURL, cfg.PriceProviderToken,
+		ctx,
+		cfg.Env,
+		cfg.PriceProvider,
+		cfg.ChainRPCURL,
+		cfg.OracleAddress,
+		cfg.PriceTokenAddresses,
 	)
 	if err != nil {
 		logger.Error("configure price provider failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer price.CloseQuoteProvider(upstreamPriceProvider)
+	if _, err := upstreamPriceProvider.Latest(ctx, cfg.PriceSymbol); err != nil {
+		logger.Error("verify configured price failed", slog.String("symbol", cfg.PriceSymbol), slog.Any("error", err))
 		os.Exit(1)
 	}
 	priceProvider := price.NewCachedQuoteProvider(upstreamPriceProvider, cacheStore, cfg.PriceCacheTTL)

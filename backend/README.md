@@ -7,7 +7,7 @@ It contains three executables:
 - `cmd/scheduler` periodically reads chain data over Ethereum JSON-RPC, writes it to the configured repository, and refreshes the configured price quote through a Redis-backed cache.
 - `cmd/migrate` applies ordered MySQL schema migrations and exits.
 
-The API and scheduler require `PRISM_POOL_ADDRESS`; the API also requires `PRISM_MULTISIG_ADDRESS`. They use `PRISM_CHAIN_RPC_URL=http://127.0.0.1:8545` by default and verify that the RPC chain ID matches `PRISM_CHAIN_ID`. `FakeReader` is used only by tests.
+The API and scheduler require `PRISM_POOL_ADDRESS`; production also requires `PRISM_ORACLE_ADDRESS` and `PRISM_PRICE_TOKEN_ADDRESSES`, while the API additionally requires `PRISM_MULTISIG_ADDRESS`. They use `PRISM_CHAIN_RPC_URL=http://127.0.0.1:8545` by default and verify that the RPC chain ID matches `PRISM_CHAIN_ID`. `FakeReader` is used only by tests.
 
 Selecting MySQL for both executables gives the API and scheduler a shared, persistent repository.
 
@@ -37,6 +37,7 @@ flowchart LR
       ChainService[Chain query service]
       MultiSig[Multisig service]
       PriceService[Token Price service]
+      RPCChainA[RPC chain reader]
     end
 
     subgraph APIData[Data-access layer]
@@ -61,7 +62,7 @@ flowchart LR
     Scheduler --> SchedulerCachedQuoteProvider[Cached quote provider]
   end
 
-  APICachedQuoteProvider --> QuoteProvider[Configured quote provider]
+  APICachedQuoteProvider --> QuoteProvider[Local or ChainlinkOracle provider]
   SchedulerCachedQuoteProvider --> QuoteProvider
   APIRepo --> MySQL
   SchedulerRepo --> MySQL
@@ -323,7 +324,7 @@ The response reports the current owners, each owner's approval, approval count, 
 
 ## Cache
 
-The API and scheduler use Redis to cache price quotes under keys such as `price:PRM`. On a cache miss, they fetch the quote from the configured provider and store it for `PRISM_PRICE_CACHE_TTL`. Local development defaults to `PRISM_PRICE_PROVIDER=local`; production refuses to start with the local provider.
+The API and scheduler use Redis to cache price quotes under keys such as `price:WETH`. On a cache miss, they read the normalized USD price from the deployed `ChainlinkOracle` with a gasless `eth_call` and store it for `PRISM_PRICE_CACHE_TTL`. Local development defaults to `PRISM_PRICE_PROVIDER=local`; production requires the Chainlink provider.
 
 Redis config:
 
@@ -353,28 +354,29 @@ the server certificate against the container's trusted CA certificates.
 Production API and scheduler processes refuse to start when
 `PRISM_REDIS_TLS=false`.
 
-For production, configure an HTTPS endpoint:
+For production, configure the deployed oracle and map API symbols to the token addresses registered in that oracle:
 
 ```text
 PRISM_ENV=production
-PRISM_PRICE_PROVIDER=http
-PRISM_PRICE_PROVIDER_URL=https://prices.example.com/v1/quote
-PRISM_PRICE_PROVIDER_TOKEN=<secret bearer token>
+PRISM_PRICE_PROVIDER=chainlink
+PRISM_ORACLE_ADDRESS=0x...
+PRISM_PRICE_SYMBOL=WETH
+PRISM_PRICE_TOKEN_ADDRESSES={"USDC":"0x...","WETH":"0x..."}
 ```
 
-The backend sends `GET <url>?symbol=PRM` with the optional provider token in the `Authorization: Bearer` header. The provider response must be:
+The public price endpoint retains the same response shape:
 
 ```json
 {
-  "symbol": "PRM",
+  "symbol": "WETH",
   "currency": "USD",
-  "price": "0.0027",
-  "source": "production-provider",
+  "price": "1915.73",
+  "source": "chainlink-oracle",
   "updatedAt": "2026-07-26T12:00:00Z"
 }
 ```
 
-The price must be a positive decimal string. Production provider URLs must use HTTPS.
+`ChainlinkOracle` already rejects non-positive, incomplete, future-dated, and stale feed rounds and returns an 18-decimal normalized USD price. Reading it through RPC does not submit a transaction or consume gas, though it counts against the configured RPC provider's request limits.
 
 Run either process with Redis cache:
 
@@ -404,15 +406,15 @@ Redis must be running before starting the API or scheduler.
 
 ### Production configuration validation
 
-With `PRISM_ENV=production`, each executable validates its configuration before opening external connections. API and scheduler require `PRISM_STORE=mysql`, either `PRISM_MYSQL_DSN` or the separate `PRISM_MYSQL_*` connection fields, a deployed pool address, Redis TLS, and an HTTPS quote provider. The API also requires a multisig address. Local authentication mode requires non-default admin credentials, an admin password of at least 12 characters, and a token secret of at least 32 characters; Cognito mode instead requires its region, user pool, app client, and proposal scope settings. The migration executable validates only its MySQL settings because it does not use contracts, Redis, quotes, or authentication.
+With `PRISM_ENV=production`, each executable validates its configuration before opening external connections. API and scheduler require `PRISM_STORE=mysql`, either `PRISM_MYSQL_DSN` or the separate `PRISM_MYSQL_*` connection fields, a deployed pool and oracle address, a symbol-to-token map, and Redis TLS. The API also requires a multisig address. Local authentication mode requires non-default admin credentials, an admin password of at least 12 characters, and a token secret of at least 32 characters; Cognito mode instead requires its region, user pool, app client, and proposal scope settings. The migration executable validates only its MySQL settings because it does not use contracts, Redis, prices, or authentication.
 
 The API bounds client connections with a 5-second header timeout, 15-second request-read timeout, 30-second response-write timeout, 60-second idle timeout, and 1 MiB maximum request-header size. These limits also apply locally so runtime behavior matches production.
 
 ### Dependency deadlines and retries
 
-The API has a 30-second startup deadline and gives each HTTP request a 25-second context deadline. Each scheduler synchronization cycle has a 30-second deadline, and the one-shot migration process has a ten-minute overall deadline. Cancellation propagates into MySQL, Redis, quote-provider, and chain RPC calls.
+The API has a 30-second startup deadline and gives each HTTP request a 25-second context deadline. Each scheduler synchronization cycle has a 30-second deadline, and the one-shot migration process has a ten-minute overall deadline. Cancellation propagates into MySQL, Redis, price, and chain RPC calls.
 
-Idempotent Chain RPC and HTTPS quote reads use at most three five-second attempts with exponential backoff beginning at 100 milliseconds and capped at one second. Quote retries are limited to network failures, HTTP 429, and HTTP 5xx responses. Redis uses its native client policy: a five-second connection timeout, three-second read and write timeouts, and at most two retries with 100-millisecond-to-one-second backoff.
+Chain and Chainlink price reads use the configured Ethereum RPC. Chainlink price reads use at most three five-second attempts with exponential backoff beginning at 100 milliseconds and capped at one second. Redis uses its native client policy: a five-second connection timeout, three-second read and write timeouts, and at most two retries with 100-millisecond-to-one-second backoff.
 
 MySQL uses a five-second connection timeout and 30-second socket read and write timeouts. Its initial connectivity check uses three bounded attempts. Individual queries remain bounded by the request, scheduler-cycle, migration, or shutdown context. Database writes and transaction-like protocol operations are not automatically retried because a lost response does not prove that the server failed to apply the operation; callers must reconcile state before repeating them.
 
@@ -787,7 +789,7 @@ go test ./...
 ## Step 7: Price service
 
 - Add a dedicated price service instead of mixing price logic into HTTP routes.
-- Keep the price provider behind an interface so a production provider can replace the local provider.
+- Keep the price provider behind an interface so production can read the deployed `ChainlinkOracle` while local development uses fixed quotes.
 - Expose `GET /api/v1/price?symbol=PRISM` for a simple latest-price read.
 - Let the scheduler refresh/log the configured price symbol on each sync cycle.
 
@@ -795,6 +797,8 @@ Files:
 
 - `internal/price/service.go`
 - `internal/price/local_quote_provider.go`
+- `internal/price/chainlink_quote_provider.go`
+- `internal/price/chainlink_quote_provider_test.go`
 - `internal/price/service_test.go`
 - `internal/httpserver/server.go`
 - `internal/httpserver/server_test.go`
@@ -972,11 +976,11 @@ The Terraform stack converts API 5xx, scheduler success/failure, provider failur
 - [x] Replace mock protocol oracle and DEX dependencies with Chainlink Data Feed and Uniswap V3 production adapters, while retaining mocks for local development, and validate the Sepolia network and configured contract addresses during deployment.
 - [x] Store chain-specific contract addresses and deployment metadata in versioned deployment manifests, with explicit environment and network verification; archive production manifests as deployment artifacts.
 - [x] Define AWS infrastructure as code for ECS/Fargate, ALB, RDS, ElastiCache, networking, security groups, IAM, DNS, TLS certificates, autoscaling, and the one-shot migration task. See `../infra/terraform`.
-- [x] Move database, Redis, quote-provider, RPC, and temporary authentication secrets out of `terraform.tfvars` and ECS task-definition environment variables into AWS Secrets Manager. RDS generates and manages its master password; ECS resolves only explicitly authorized secret ARNs at task startup. The Redis token is read by Terraform to configure ElastiCache and therefore remains protected by the encrypted remote state.
+- [x] Move database, Redis, RPC, and temporary authentication secrets out of `terraform.tfvars` and ECS task-definition environment variables into AWS Secrets Manager. RDS generates and manages its master password; ECS resolves only explicitly authorized secret ARNs at task startup. The Redis token is read by Terraform to configure ElastiCache and therefore remains protected by the encrypted remote state.
 - [x] Add a bounded `/readyz` endpoint that checks MySQL, Redis, and the configured chain RPC concurrently before the load balancer sends traffic, while retaining `/healthz` as a dependency-free liveness endpoint.
 - [x] Enforce one scheduler task for now: the ECS service has a fixed desired count of one and 0%/100% rolling-deployment bounds, which stop the old task before starting its replacement. Do not run standalone scheduler tasks or another scheduler service; add a distributed lock before allowing redundancy or overlapping deployments.
 - [x] Limit login JSON bodies to 4 KiB and proposal JSON bodies to 64 KiB in the application, returning HTTP 413 when exceeded; attach AWS WAF to the ALB and rate-limit login and proposal POST requests per source IP with configurable five-minute limits and HTTP 429 responses.
-- [x] Add bounded deadlines and retry/backoff policies for chain RPC, quote-provider, MySQL, and Redis operations. Retry only idempotent reads and initial connectivity checks; never blindly retry database writes or transaction-like operations with ambiguous outcomes.
+- [x] Add bounded deadlines and retry/backoff policies for chain RPC, Chainlink price, MySQL, and Redis operations. Retry only idempotent reads and initial connectivity checks; never blindly retry database writes or transaction-like operations with ambiguous outcomes.
 - [x] Add production metrics, request correlation IDs, structured error fields, CloudWatch alarms, scheduler-lag monitoring, and alerts for migration or provider failures.
 - [x] Enforce safe deployment ordering with a Terraform migration gate: create or update infrastructure and the one-shot migration task first, run that exact ECS task revision and require exit code zero, and only then update the API and scheduler ECS services. A failed migration stops the apply before either service rollout.
 - [ ] Bootstrap and protect the remote Terraform state store with the separate `../infra/terraform-bootstrap` stack: use a private S3 bucket with KMS encryption, versioning, public-access blocking, TLS enforcement, native S3 lockfiles, state-deletion protection, and least-privilege access that excludes historical versions. Downloaded state files are ignored and state access is treated as secret access because the state can contain the Redis token even when Terraform redacts it from plan output.

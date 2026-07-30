@@ -120,7 +120,7 @@ resource "aws_cloudwatch_metric_alarm" "scheduler_lag" {
 
 resource "aws_cloudwatch_metric_alarm" "provider_failure" {
   alarm_name          = "${local.name}-provider-failure"
-  alarm_description   = "The scheduler reported an upstream chain RPC or quote-provider failure."
+  alarm_description   = "The scheduler reported an upstream chain RPC or ChainlinkOracle price-read failure."
   namespace           = local.metrics_namespace
   metric_name         = "ProviderFailureCount"
   statistic           = "Sum"

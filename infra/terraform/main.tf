@@ -21,8 +21,10 @@ locals {
     { name = "PRISM_MYSQL_DATABASE", value = var.db_name },
     { name = "PRISM_REDIS_ADDR", value = "${aws_elasticache_replication_group.main.primary_endpoint_address}:6379" },
     { name = "PRISM_REDIS_TLS", value = "true" },
-    { name = "PRISM_PRICE_PROVIDER", value = "http" },
-    { name = "PRISM_PRICE_PROVIDER_URL", value = var.price_provider_url },
+    { name = "PRISM_PRICE_PROVIDER", value = "chainlink" },
+    { name = "PRISM_ORACLE_ADDRESS", value = var.oracle_address },
+    { name = "PRISM_PRICE_SYMBOL", value = var.price_symbol },
+    { name = "PRISM_PRICE_TOKEN_ADDRESSES", value = jsonencode(var.price_token_addresses) },
     { name = "PRISM_AUTH_MODE", value = "cognito" },
     { name = "PRISM_COGNITO_REGION", value = var.cognito_region },
     { name = "PRISM_COGNITO_USER_POOL_ID", value = var.cognito_user_pool_id },
@@ -33,15 +35,13 @@ locals {
     { name = "PRISM_CHAIN_RPC_URL", valueFrom = var.chain_rpc_url_secret_arn },
     { name = "PRISM_MYSQL_USERNAME", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:username::" },
     { name = "PRISM_MYSQL_PASSWORD", valueFrom = "${aws_db_instance.main.master_user_secret[0].secret_arn}:password::" },
-    { name = "PRISM_REDIS_PASSWORD", valueFrom = var.redis_auth_token_secret_arn },
-    { name = "PRISM_PRICE_PROVIDER_TOKEN", valueFrom = var.price_provider_token_secret_arn }
+    { name = "PRISM_REDIS_PASSWORD", valueFrom = var.redis_auth_token_secret_arn }
   ]
 
   runtime_secret_arns = [
     var.chain_rpc_url_secret_arn,
     aws_db_instance.main.master_user_secret[0].secret_arn,
-    var.redis_auth_token_secret_arn,
-    var.price_provider_token_secret_arn
+    var.redis_auth_token_secret_arn
   ]
 }
 
@@ -330,9 +330,9 @@ resource "aws_iam_role" "execution" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "ecs-tasks.amazonaws.com" }
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 }
@@ -360,9 +360,9 @@ resource "aws_iam_role" "task" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "ecs-tasks.amazonaws.com" }
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 }
@@ -408,12 +408,12 @@ resource "aws_ecs_task_definition" "scheduler" {
   task_role_arn            = aws_iam_role.task.arn
 
   container_definitions = jsonencode([{
-    name             = "scheduler"
-    image            = var.image_uri
-    essential        = true
-    command          = ["/app/scheduler"]
-    environment      = local.common_environment
-    secrets          = local.common_secrets
+    name        = "scheduler"
+    image       = var.image_uri
+    essential   = true
+    command     = ["/app/scheduler"]
+    environment = local.common_environment
+    secrets     = local.common_secrets
     logConfiguration = {
       logDriver = "awslogs"
       options = {

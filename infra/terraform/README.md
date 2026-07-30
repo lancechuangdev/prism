@@ -2,17 +2,16 @@
 
 This Terraform stack creates the production AWS baseline: a two-AZ VPC, public HTTPS Application Load Balancer, private ECS/Fargate API and scheduler, private Multi-AZ RDS MySQL, encrypted ElastiCache Redis, Route 53 DNS, ACM TLS, CloudWatch logs, IAM task roles, API autoscaling, and a one-shot migration task definition.
 
-Before planning, create three Secrets Manager secrets containing raw string values (not JSON):
+Before planning, create two Secrets Manager secrets containing raw string values (not JSON):
 
 - the Ethereum RPC URL;
-- the Redis AUTH token, with at least 16 characters;
-- the quote-provider bearer token.
+- the Redis AUTH token, with at least 16 characters.
 
-Put only their ARNs in `terraform.tfvars`. RDS generates its own master password in a separate AWS-managed secret. The ECS execution role can read only these four runtime secrets, and ECS injects them when each task starts. Terraform must read the Redis token to configure ElastiCache, so that value is also protected by the encrypted remote Terraform state.
+Put only their ARNs in `terraform.tfvars`. RDS generates its own master password in a separate AWS-managed secret. The ECS execution role can read only these three runtime secrets, and ECS injects them when each task starts. Terraform must read the Redis token to configure ElastiCache, so that value is also protected by the encrypted remote Terraform state.
 
 ## Redis authentication flow
 
-Redis is different from the external RPC and quote providers because this Terraform stack configures both the Redis server and the Prism client.
+Redis is different from the external RPC provider because this Terraform stack configures both the Redis server and the Prism client.
 
 ElastiCache must receive the actual token when Terraform creates or updates the replication group. That configures the server to accept clients presenting that token. ECS independently retrieves the same value from Secrets Manager when a Prism task starts and injects it as `PRISM_REDIS_PASSWORD`.
 
@@ -31,7 +30,7 @@ flowchart LR
     ECS -->|"authenticate with token X"| Redis
 ```
 
-The RPC and quote-provider servers are operated and configured outside this stack. Terraform therefore places only their secret ARNs in the ECS task definition; ECS reads their values at startup, while Terraform itself does not need those values.
+The RPC server is operated outside this stack. Terraform therefore places only its secret ARN in the ECS task definition; ECS reads the value at startup, while Terraform itself does not need it. The backend reads prices from the deployed `ChainlinkOracle` over the same RPC connection.
 
 Terraform marks the Redis token as sensitive and hides it from normal plan output, but the value can still exist in Terraform state. Anyone able to read the state must therefore be treated as having access to the Redis credential.
 
@@ -67,7 +66,7 @@ flowchart LR
 
 Do not bypass this ordering with `terraform apply -target=aws_ecs_service.api`, `terraform apply -target=aws_ecs_service.scheduler`, or direct `aws ecs update-service` commands. The deployment identity needs permission to run, describe, and wait for ECS tasks in addition to its Terraform permissions.
 
-The stack requires an encrypted, access-controlled S3 remote backend rather than silently creating local production state. The state bucket and lock table are bootstrap resources and must exist before `terraform init`. Rotating the RPC or quote-provider secret requires replacing the running ECS tasks so they resolve the new version. Rotating the Redis token also requires a reviewed Terraform plan to update ElastiCache.
+The stack requires an encrypted, access-controlled S3 remote backend rather than silently creating local production state. The state bucket and lock table are bootstrap resources and must exist before `terraform init`. Rotating the RPC secret requires replacing the running ECS tasks so they resolve the new version. Rotating the Redis token also requires a reviewed Terraform plan to update ElastiCache.
 
 The scheduler ECS service deliberately runs one replica. Its rolling-deployment bounds are 0% minimum healthy and 100% maximum, so ECS stops the old scheduler before starting its replacement instead of briefly running two schedulers. Scheduler synchronization pauses during that replacement. Do not start standalone scheduler tasks or create a second scheduler service; use a distributed lock before introducing scheduler redundancy or zero-downtime overlap.
 

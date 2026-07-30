@@ -37,70 +37,70 @@ const (
 )
 
 type Config struct {
-	Env                string
-	Port               string
-	APIVersion         string
-	ChainID            string
-	ChainRPCURL        string
-	PoolAddress        string
-	MultisigAddress    string
-	SyncInterval       time.Duration
-	AdminUsername      string
-	AdminPassword      string
-	TokenSecret        string
-	TokenTTL           time.Duration
-	AuthMode           string
-	CognitoRegion      string
-	CognitoUserPoolID  string
-	CognitoClientID    string
-	ProposalWriteScope string
-	AdminReadScope     string
-	PriceSymbol        string
-	PriceProvider      string
-	PriceProviderURL   string
-	PriceProviderToken string
-	StoreDriver        string
-	MySQLDSN           string
-	RedisAddress       string
-	RedisPassword      string
-	RedisDB            int
-	RedisTLS           bool
-	RedisTLSServerName string
-	PriceCacheTTL      time.Duration
+	Env                 string
+	Port                string
+	APIVersion          string
+	ChainID             string
+	ChainRPCURL         string
+	PoolAddress         string
+	MultisigAddress     string
+	SyncInterval        time.Duration
+	AdminUsername       string
+	AdminPassword       string
+	TokenSecret         string
+	TokenTTL            time.Duration
+	AuthMode            string
+	CognitoRegion       string
+	CognitoUserPoolID   string
+	CognitoClientID     string
+	ProposalWriteScope  string
+	AdminReadScope      string
+	PriceSymbol         string
+	PriceProvider       string
+	OracleAddress       string
+	PriceTokenAddresses string
+	StoreDriver         string
+	MySQLDSN            string
+	RedisAddress        string
+	RedisPassword       string
+	RedisDB             int
+	RedisTLS            bool
+	RedisTLSServerName  string
+	PriceCacheTTL       time.Duration
 }
 
 func Load() Config {
 	return Config{
-		Env:                readEnv("PRISM_ENV", defaultEnv),
-		Port:               readEnv("PRISM_API_PORT", defaultPort),
-		APIVersion:         readEnv("PRISM_API_VERSION", defaultAPIVersion),
-		ChainID:            readEnv("PRISM_CHAIN_ID", defaultChainId),
-		ChainRPCURL:        readEnv("PRISM_CHAIN_RPC_URL", defaultChainRPCURL),
-		PoolAddress:        readEnv("PRISM_POOL_ADDRESS", ""),
-		MultisigAddress:    readEnv("PRISM_MULTISIG_ADDRESS", ""),
-		SyncInterval:       readDurationEnv("PRISM_SYNC_INTERVAL", defaultSyncEvery),
-		AdminUsername:      readEnv("PRISM_ADMIN_USERNAME", defaultAdminUser),
-		AdminPassword:      readEnv("PRISM_ADMIN_PASSWORD", defaultAdminPass),
-		TokenSecret:        readEnv("PRISM_TOKEN_SECRET", defaultTokenSecret),
-		TokenTTL:           readDurationEnv("PRISM_TOKEN_TTL", defaultTokenTTL),
-		AuthMode:           strings.ToLower(readEnv("PRISM_AUTH_MODE", defaultAuthMode)),
-		CognitoRegion:      readEnv("PRISM_COGNITO_REGION", ""),
-		CognitoUserPoolID:  readEnv("PRISM_COGNITO_USER_POOL_ID", ""),
-		CognitoClientID:    readEnv("PRISM_COGNITO_CLIENT_ID", ""),
-		ProposalWriteScope: readEnv("PRISM_COGNITO_PROPOSAL_SCOPE", defaultProposalScope),
-		AdminReadScope:     readEnv("PRISM_COGNITO_ADMIN_SCOPE", defaultAdminScope),
-		PriceSymbol:        readEnv("PRISM_PRICE_SYMBOL", defaultPriceSymbol),
-		PriceProvider:      readEnv("PRISM_PRICE_PROVIDER", defaultPriceProvider),
-		PriceProviderURL:   readEnv("PRISM_PRICE_PROVIDER_URL", ""),
-		PriceProviderToken: readEnv("PRISM_PRICE_PROVIDER_TOKEN", ""),
-		StoreDriver:        strings.ToLower(readEnv("PRISM_STORE", defaultStoreDriver)),
-		MySQLDSN:           readMySQLDSN(),
-		RedisAddress:       readEnv("PRISM_REDIS_ADDR", defaultRedisAddr),
-		RedisPassword:      readEnv("PRISM_REDIS_PASSWORD", ""),
-		RedisDB:            readIntEnv("PRISM_REDIS_DB", 0),
-		RedisTLS:           readBoolEnv("PRISM_REDIS_TLS", false),
-		RedisTLSServerName: readEnv("PRISM_REDIS_TLS_SERVER_NAME", ""),
-		PriceCacheTTL:      readDurationEnv("PRISM_PRICE_CACHE_TTL", defaultPriceTTL),
+		Env:                 readEnv("PRISM_ENV", defaultEnv),
+		Port:                readEnv("PRISM_API_PORT", defaultPort),
+		APIVersion:          readEnv("PRISM_API_VERSION", defaultAPIVersion),
+		ChainID:             readEnv("PRISM_CHAIN_ID", defaultChainId),
+		ChainRPCURL:         readEnv("PRISM_CHAIN_RPC_URL", defaultChainRPCURL),
+		PoolAddress:         readEnv("PRISM_POOL_ADDRESS", ""),
+		MultisigAddress:     readEnv("PRISM_MULTISIG_ADDRESS", ""),
+		SyncInterval:        readDurationEnv("PRISM_SYNC_INTERVAL", defaultSyncEvery),
+		AdminUsername:       readEnv("PRISM_ADMIN_USERNAME", defaultAdminUser),
+		AdminPassword:       readEnv("PRISM_ADMIN_PASSWORD", defaultAdminPass),
+		TokenSecret:         readEnv("PRISM_TOKEN_SECRET", defaultTokenSecret),
+		TokenTTL:            readDurationEnv("PRISM_TOKEN_TTL", defaultTokenTTL),
+		AuthMode:            strings.ToLower(readEnv("PRISM_AUTH_MODE", defaultAuthMode)),
+		CognitoRegion:       readEnv("PRISM_COGNITO_REGION", ""),
+		CognitoUserPoolID:   readEnv("PRISM_COGNITO_USER_POOL_ID", ""),
+		CognitoClientID:     readEnv("PRISM_COGNITO_CLIENT_ID", ""),
+		ProposalWriteScope:  readEnv("PRISM_COGNITO_PROPOSAL_SCOPE", defaultProposalScope),
+		AdminReadScope:      readEnv("PRISM_COGNITO_ADMIN_SCOPE", defaultAdminScope),
+		PriceSymbol:         readEnv("PRISM_PRICE_SYMBOL", defaultPriceSymbol),
+		PriceProvider:       readEnv("PRISM_PRICE_PROVIDER", defaultPriceProvider),
+		OracleAddress:       readEnv("PRISM_ORACLE_ADDRESS", ""),
+		PriceTokenAddresses: readEnv("PRISM_PRICE_TOKEN_ADDRESSES", ""),
+		StoreDriver:         strings.ToLower(readEnv("PRISM_STORE", defaultStoreDriver)),
+		MySQLDSN:            readMySQLDSN(),
+		RedisAddress:        readEnv("PRISM_REDIS_ADDR", defaultRedisAddr),
+		RedisPassword:       readEnv("PRISM_REDIS_PASSWORD", ""),
+		RedisDB:             readIntEnv("PRISM_REDIS_DB", 0),
+		RedisTLS:            readBoolEnv("PRISM_REDIS_TLS", false),
+		RedisTLSServerName:  readEnv("PRISM_REDIS_TLS_SERVER_NAME", ""),
+		PriceCacheTTL:       readDurationEnv("PRISM_PRICE_CACHE_TTL", defaultPriceTTL),
 	}
 }
 
@@ -171,11 +171,14 @@ func (c Config) Validate(component string) error {
 	if !c.RedisTLS {
 		problems = append(problems, fmt.Errorf("PRISM_REDIS_TLS must be true in production"))
 	}
-	if !strings.EqualFold(c.PriceProvider, "http") {
-		problems = append(problems, fmt.Errorf("PRISM_PRICE_PROVIDER must be http in production"))
+	if !strings.EqualFold(c.PriceProvider, "chainlink") {
+		problems = append(problems, fmt.Errorf("PRISM_PRICE_PROVIDER must be chainlink in production"))
 	}
-	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(c.PriceProviderURL)), "https://") {
-		problems = append(problems, fmt.Errorf("PRISM_PRICE_PROVIDER_URL must use HTTPS in production"))
+	if strings.TrimSpace(c.OracleAddress) == "" {
+		problems = append(problems, fmt.Errorf("PRISM_ORACLE_ADDRESS is required in production"))
+	}
+	if strings.TrimSpace(c.PriceTokenAddresses) == "" {
+		problems = append(problems, fmt.Errorf("PRISM_PRICE_TOKEN_ADDRESSES is required in production"))
 	}
 
 	if component == ComponentAPI {

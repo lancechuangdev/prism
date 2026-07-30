@@ -108,20 +108,8 @@ PRISM_UNISWAP_V3_POOLS='[
 npm run deploy:sepolia
 ```
 
-The script refuses non-Sepolia RPC networks, validates the separately controlled
-multisig owner addresses and threshold, checks every configured dependency for
-bytecode, verifies each token's ERC-20 symbol and decimals, and validates each
-Chainlink feed's description, decimals, round completeness, positive answer,
-timestamp, and configured maximum staleness before sending deployment
-transactions. It then deploys `ThresholdMultiSig`, transfers oracle and adapter
-ownership to it, and deploys `PrismPool` with the production adapters. It
-atomically writes the versioned deployment manifest to
-`deployments/sepolia.json`, including the verified feed metadata, multisig
-owners and threshold, environment, network, chain ID, deployment time and
-block, configured dependencies, and deployed addresses.
-Commit or upload this manifest as a deployment artifact so stdout or an
-operator's shell history is not the source of truth. Configure every swap
-direction used by repayment or liquidation.
+The script refuses non-Sepolia RPC networks, validates the separately controlled multisig owner addresses and threshold, checks every configured dependency for bytecode, verifies each token's ERC-20 symbol and decimals, and validates each Chainlink feed's description, decimals, round completeness, positive answer, timestamp, and configured maximum staleness before sending deployment transactions. It then deploys `ThresholdMultiSig`, transfers oracle and adapter ownership to it, and deploys `PrismPool` with the production adapters. It atomically writes the versioned deployment manifest to `deployments/sepolia.json`, including the verified feed metadata, multisig owners and threshold, environment, network, chain ID, deployment time and block, configured dependencies, and deployed addresses.
+Commit or upload this manifest as a deployment artifact so stdout or an operator's shell history is not the source of truth. Configure every swap direction used by repayment or liquidation.
 This is a testnet integration path, not a claim that Prism's own contracts have received a security audit.
 
 Before configuring a backend from the manifest, verify its identity:
@@ -143,6 +131,16 @@ export PRISM_POOL_ADDRESS="$(
 )"
 export PRISM_MULTISIG_ADDRESS="$(
   jq -r '.multisig' protocol/deployments/sepolia.json
+)"
+export PRISM_ORACLE_ADDRESS="$(
+  jq -r '.chainlinkOracle' protocol/deployments/sepolia.json
+)"
+export PRISM_PRICE_TOKEN_ADDRESSES="$(
+  jq -c '
+    .feedChecks
+    | map({key: .tokenSymbol, value: .token})
+    | from_entries
+  ' protocol/deployments/sepolia.json
 )"
 ```
 
@@ -302,9 +300,17 @@ jq '.abi' \
 jq '.abi' \
   protocol/artifacts/contracts/admin/ThresholdMultiSig.sol/ThresholdMultiSig.json \
   > protocol/contracts/admin/ThresholdMultiSig.abi.json
+
+jq '.abi' \
+  protocol/artifacts/contracts/oracle/ChainlinkOracle.sol/ChainlinkOracle.json \
+  > protocol/contracts/oracle/ChainlinkOracle.abi.json
+
+jq '.abi' \
+  protocol/artifacts/contracts/oracle/ChainlinkOracle.sol/IChainlinkAggregatorV3.json \
+  > protocol/contracts/oracle/IChainlinkAggregatorV3.abi.json
 ```
 
-Create the Go package directory and generate both bindings:
+Create the Go package directory and generate the bindings:
 
 ```bash
 mkdir -p backend/internal/contracts
@@ -320,6 +326,18 @@ abigen \
   --pkg contracts \
   --type ThresholdMultiSig \
   --out backend/internal/contracts/threshold_multi_sig.go
+
+abigen \
+  --abi protocol/contracts/oracle/ChainlinkOracle.abi.json \
+  --pkg contracts \
+  --type ChainlinkOracle \
+  --out backend/internal/contracts/chainlink_oracle.go
+
+abigen \
+  --abi protocol/contracts/oracle/IChainlinkAggregatorV3.abi.json \
+  --pkg contracts \
+  --type ChainlinkAggregatorV3 \
+  --out backend/internal/contracts/chainlink_aggregator_v3.go
 ```
 
 Format and verify the generated code:
