@@ -101,6 +101,8 @@ PRISM_UNISWAP_V3_POOLS='[
 npm run deploy:sepolia
 ```
 
+The `deploy:sepolia` npm script automatically loads and exports variables from `protocol/.env` when that file exists. Existing shell variables and Hardhat encrypted-keystore values continue to work when `.env` is absent. The ignored `.env` file must contain Bash-compatible assignments.
+
 The script refuses non-Sepolia RPC networks, validates the separately controlled multisig owner addresses and threshold, checks every configured dependency for bytecode, verifies each token's ERC-20 symbol and decimals, and validates each Chainlink feed's description, decimals, round completeness, positive answer, timestamp, and configured maximum staleness before sending deployment transactions. It then deploys `ThresholdMultiSig`, transfers oracle and adapter ownership to it, and deploys `PrismPool` with the production adapters. It atomically writes the versioned deployment manifest to `deployments/sepolia.json`, including the verified feed metadata, multisig owners and threshold, environment, network, chain ID, deployment time and block, configured dependencies, and deployed addresses.
 Commit or upload this manifest as a deployment artifact so stdout or an operator's shell history is not the source of truth. Configure every swap direction used by repayment or liquidation.
 This is a testnet integration path, not a claim that Prism's own contracts have received a security audit.

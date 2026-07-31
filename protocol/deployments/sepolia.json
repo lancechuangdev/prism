@@ -3,10 +3,10 @@
   "environment": "production",
   "network": "sepolia",
   "chainId": "11155111",
-  "deployedAt": "2026-07-30T19:35:50.228Z",
-  "deploymentBlock": 11384520,
+  "deployedAt": "2026-07-31T00:39:24.807Z",
+  "deploymentBlock": 11385984,
   "deployer": "0x49e609cd38fa292Bc02D6d0F196Bec9fd07DA3bf",
-  "multisig": "0xddE278CFAF239aFe6336A373Eb978F81979261ee",
+  "multisig": "0x9749485D52054c6Ac75fb8249B8546cc0b9908B5",
   "multisigOwners": [
     "0x119938494Febb31C3946Ca23281261c0545091De",
     "0x49e609cd38fa292Bc02D6d0F196Bec9fd07DA3bf",
@@ -14,11 +14,11 @@
   ],
   "multisigThreshold": "2",
   "feeAddress": "0x119938494Febb31C3946Ca23281261c0545091De",
-  "chainlinkOracle": "0x9E028Db536A2597B8746029452dA645983caf30B",
-  "uniswapV3SwapAdapter": "0x47a2220DAF4877E8aAf81c6D4f933BDE348CBE9d",
+  "chainlinkOracle": "0xDF43C72Bd322123058D41e7eB4392DC86723cC67",
+  "uniswapV3SwapAdapter": "0x827874cf60EcB5c109B139538bbEe632c4b75435",
   "uniswapV3Router": "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
   "uniswapV3Quoter": "0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3",
-  "prismPool": "0xC9057b9aa31C0e7174c4943fBeC32EFa7A859Cc6",
+  "prismPool": "0xD4b5c00f8fEa0019a689f38CdeBB013972EEE278",
   "feeds": [
     {
       "token": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
@@ -39,8 +39,8 @@
       "feed": "0xA2F78ab2355fe2f984D808B5CeE7FD0A93D5270E",
       "feedDescription": "USDC / USD",
       "feedDecimals": 8,
-      "latestAnswer": "99975867",
-      "updatedAt": 1785354036
+      "latestAnswer": "99976123",
+      "updatedAt": 1785440472
     },
     {
       "token": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
@@ -49,8 +49,8 @@
       "feed": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
       "feedDescription": "ETH / USD",
       "feedDecimals": 8,
-      "latestAnswer": "191573000000",
-      "updatedAt": 1785437376
+      "latestAnswer": "191870570000",
+      "updatedAt": 1785455640
     }
   ],
   "pools": [
