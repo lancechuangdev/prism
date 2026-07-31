@@ -35,17 +35,7 @@ The RPC server is operated outside this stack. Terraform therefore places only i
 
 Terraform marks the Redis token as sensitive and hides it from normal plan output, but the value can still exist in Terraform state. Anyone able to read the state must therefore be treated as having access to the Redis credential.
 
-Copy `terraform.tfvars.example` to an untracked `terraform.tfvars`, use an
-immutable container digest, and ensure both Terraform and AWS CLI v2 use the
-same authorized AWS identity. Then run:
-
-```bash
-cp backend.hcl.example backend.hcl
-# Fill in the pre-created, versioned S3 state bucket and DynamoDB lock table.
-terraform init -backend-config=backend.hcl
-terraform plan -out=tfplan
-terraform apply tfplan
-```
+The authoritative prerequisites, secret-creation commands, variable configuration, plan/apply sequence, and deployment verification are in [`../README.md`](../README.md). This file documents Terraform implementation details only.
 
 The apply enforces this order:
 

@@ -143,21 +143,7 @@ The `/api/v1` prefix uses `PRISM_API_VERSION=1`.
 
 ## Chain RPC
 
-Start the local Hardhat node and deploy the protocol before either backend process. Use a Docker-reachable bind address when running the backend through Compose:
-
-```bash
-cd protocol
-npx hardhat node --hostname 0.0.0.0
-```
-
-In another terminal:
-
-```bash
-cd protocol
-npm run deploy:local
-```
-
-Use the `chainId`, `rpcUrl`, `prismPool`, and `multisig` values printed by the deployment:
+Deploy the contracts by following [`../protocol/README.md`](../protocol/README.md), then configure the backend with the resulting manifest values:
 
 ```text
 PRISM_CHAIN_ID=31337
@@ -502,16 +488,42 @@ PRISM_MYSQL_DSN="prism:prism@tcp(127.0.0.1:3306)/prism_backend?parseTime=true&ch
 go run ./cmd/migrate
 ```
 
-## Docker Compose
+## Local backend deployment
+
+Install Docker with the Compose plugin and `jq`. First complete the local protocol deployment in [`../protocol/README.md`](../protocol/README.md). For Docker Compose, start the Hardhat node with `npx hardhat node --hostname 0.0.0.0` instead of its loopback-only default, then run the protocol guide's local deployment command. Keep the node running. Binding to `0.0.0.0` is for local development and may expose Hardhat development accounts and RPC methods to the local network. The deployment writes the current contract addresses to `../protocol/deployments/local.json`.
+
+From the repository's `backend` directory, load the two required host-provided variables from that manifest:
+
+```bash
+cd /home/boris-alienware/projects/prism/backend
+
+export PRISM_POOL_ADDRESS="$(
+  jq -r '.prismPool' ../protocol/deployments/local.json
+)"
+export PRISM_MULTISIG_ADDRESS="$(
+  jq -r '.multisig' ../protocol/deployments/local.json
+)"
+```
 
 Run the stack with migration, API, scheduler, MySQL, and Redis services:
 
 ```bash
-cd backend
-PRISM_POOL_ADDRESS=0x... \
-PRISM_MULTISIG_ADDRESS=0x... \
 docker compose up --build
 ```
+
+`PRISM_POOL_ADDRESS` and `PRISM_MULTISIG_ADDRESS` are the only variables that the default local Compose deployment requires from the host. `docker-compose.yml` supplies the local chain ID and RPC URL, MySQL and Redis configuration, API authentication defaults, scheduler interval, and local fixed-price provider.
+
+Automatic liquidation is disabled by default. After the multisig authorizes a dedicated local keeper address as documented under [Automatic liquidation keeper](#automatic-liquidation-keeper), export its corresponding key and optional slippage limit before starting Compose:
+
+```bash
+export PRISM_LIQUIDATION_ENABLED=true
+export PRISM_LIQUIDATION_PRIVATE_KEY=0x...
+export PRISM_LIQUIDATION_SLIPPAGE_BPS=100
+
+docker compose up --build
+```
+
+Compose injects these optional values only into the scheduler container. The API and migration containers do not receive the keeper private key.
 
 Compose connects the API and scheduler to the Hardhat node running on the host and uses chain ID `31337`. On Linux, Compose maps `host.docker.internal` to Docker's host gateway:
 

@@ -54,6 +54,9 @@ services:
     environment:
       <<: *prism-env
       PRISM_SYNC_INTERVAL: 30s
+      PRISM_LIQUIDATION_ENABLED: "${PRISM_LIQUIDATION_ENABLED:-false}"
+      PRISM_LIQUIDATION_PRIVATE_KEY: "${PRISM_LIQUIDATION_PRIVATE_KEY:-}"
+      PRISM_LIQUIDATION_SLIPPAGE_BPS: "${PRISM_LIQUIDATION_SLIPPAGE_BPS:-100}"
     # Let the container reach the Hardhat RPC node running on the Docker host.
     extra_hosts:
       - "host.docker.internal:host-gateway"

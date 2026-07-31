@@ -2,6 +2,8 @@
 
 Fixed-rate lending protocol distilled from previous DeFi experience.
 
+Run commands in this guide from the `protocol` directory unless a command explicitly changes directories.
+
 ## Lending pool transitions
 
 ```mermaid
@@ -37,20 +39,11 @@ Install the protocol dependencies if needed:
 npm install
 ```
 
-Start a persistent local Hardhat JSON-RPC node in the first terminal. For a backend running directly on the host:
+Start a persistent local Hardhat JSON-RPC node in the first terminal:
 
 ```bash
 npm run node
 ```
-
-For a backend running in Docker, Hardhat must also accept connections arriving through the host's Docker bridge interface:
-
-```bash
-npx hardhat node --hostname 0.0.0.0
-```
-
-Docker's `host.docker.internal` hostname resolves to the host gateway, commonly `172.17.0.1` on Linux. A Hardhat node bound only to its default `127.0.0.1` address cannot accept connections through that gateway. Binding to `0.0.0.0` is intended for local development and may expose the development
-node to the local network, depending on the host firewall.
 
 Keep that process running. In a second terminal, deploy and seed the protocol:
 
@@ -118,7 +111,7 @@ This is a testnet integration path, not a claim that Prism's own contracts have 
 
 An older `PrismPool` deployed before `setLiquidator` was added cannot use the automatic keeper and must be redeployed from the current contract source. Do not transfer pool ownership from the multisig to the scheduler as a workaround.
 
-Before configuring a backend from the manifest, verify its identity:
+Verify the deployment manifest before archiving or consuming it:
 
 ```bash
 jq -e '
@@ -126,41 +119,10 @@ jq -e '
   .environment == "production" and
   .network == "sepolia" and
   .chainId == "11155111"
-' protocol/deployments/sepolia.json
-
-export PRISM_ENV=production
-export PRISM_CHAIN_ID="$(
-  jq -r '.chainId' protocol/deployments/sepolia.json
-)"
-export PRISM_POOL_ADDRESS="$(
-  jq -r '.prismPool' protocol/deployments/sepolia.json
-)"
-export PRISM_MULTISIG_ADDRESS="$(
-  jq -r '.multisig' protocol/deployments/sepolia.json
-)"
-export PRISM_ORACLE_ADDRESS="$(
-  jq -r '.chainlinkOracle' protocol/deployments/sepolia.json
-)"
-export PRISM_PRICE_TOKEN_ADDRESSES="$(
-  jq -c '
-    .feedChecks
-    | map({key: .tokenSymbol, value: .token})
-    | from_entries
-  ' protocol/deployments/sepolia.json
-)"
+' deployments/sepolia.json
 ```
 
-To pass the generated contract addresses to the Docker backend:
-
-```bash
-export PRISM_POOL_ADDRESS="$(
-  jq -r '.prismPool' protocol/deployments/local.json
-)"
-export PRISM_MULTISIG_ADDRESS="$(
-  jq -r '.multisig' protocol/deployments/local.json
-)"
-docker compose up --build
-```
+Use [`../backend/README.md`](../backend/README.md) to run the backend locally from `deployments/local.json`. Use [`../infra/README.md`](../infra/README.md) to deploy AWS from the verified `deployments/sepolia.json`.
 
 ## Pool ownership
 
@@ -362,18 +324,19 @@ The `abigen` commands overwrite the existing generated Go files, which is expect
 
 Apply the same process to other contracts as needed.
 
-## TODO: production asset support
-
-Before accepting real assets such as USDT, WETH, or WBTC:
+## TODO: production asset support before accepting real assets such as USDT, WETH, or WBTC
 
 - [x] normalize pool calculations and global token-quantity minimums for tokens with different decimals;
-- replace the global normalized minimums with independently configurable per-token or per-pool minimums;
-- replace every raw `transfer`, `transferFrom`, and `approve` call in `PrismPool` with `SafeERC20`, including zero-reset-compatible approvals, before supporting arbitrary mainnet tokens;
-- correct and test the repayment-interest units;
+-  [ ] replace the global normalized minimums with independently configurable per-token or per-pool minimums;
+-  [ ] replace every raw `transfer`, `transferFrom`, and `approve` call in `PrismPool` with `SafeERC20`, including zero-reset-compatible approvals, before supporting arbitrary mainnet tokens;
+-  [ ] correct and test the repayment-interest units;
+-  [ ] add explicit wrapped-asset UX, since native ETH and BTC are not ERC-20 tokens.
+
+## TODO: Chainlink and Uniswap adapters
+
 - [x] provide Chainlink Data Feed and Uniswap V3 production integrations while retaining mocks for local development;
-- replace the direct, single-pool Uniswap V3 configuration with automatic route discovery that compares available pools and fee tiers, supports multi-hop routes when appropriate, and applies explicit liquidity and price-impact limits;
-- remove on-chain QuoterV2 calls from repayment and liquidation because Uniswap quoting is gas-intensive and intended for off-chain simulation; obtain reviewable quotes during proposal preparation and execute swaps with independently enforced on-chain input/output limits;
-- add explicit wrapped-asset UX, since native ETH and BTC are not ERC-20 tokens.
+-  [ ] replace the direct, single-pool Uniswap V3 configuration with automatic route discovery that compares available pools and fee tiers, supports multi-hop routes when appropriate, and applies explicit liquidity and price-impact limits;
+-  [ ] remove on-chain QuoterV2 calls from repayment and liquidation because Uniswap quoting is gas-intensive and intended for off-chain simulation; obtain reviewable quotes during proposal preparation and execute swaps with independently enforced on-chain input/output limits;
 
 ## TODO: Position-token redemption warning
 
@@ -384,3 +347,37 @@ The current fungible `PositionToken` does not identify the pool that minted it, 
 Until this is redesigned, every pool must use unique lender and borrower position-token contracts. The local deployment and `create-pool:api` helper currently reuse their generated position-token addresses, so creating multiple pools with those helpers is for development only and must not be treated as production-safe.
 
 TODO: enforce pool-specific positions in the protocol, either by deploying unique tokens per pool, using an ERC-1155 token ID derived from `poolId`, or adding explicit per-pool redemption accounting.
+
+## TODO: Harden deployment-key management
+
+The current Hardhat configuration accepts `SEPOLIA_PRIVATE_KEY` as a configuration variable. Do not keep a plaintext private key in a committed file, shell script, command history, CI log, or shared chat.
+
+For Sepolia deployments, migrate the RPC URL and dedicated, low-balance deployment key from plaintext environment variables to Hardhat's encrypted keystore:
+
+```bash
+npx hardhat keystore set SEPOLIA_PRIVATE_KEY
+npx hardhat keystore set SEPOLIA_RPC_URL
+
+unset SEPOLIA_PRIVATE_KEY
+unset SEPOLIA_RPC_URL
+
+npx hardhat keystore list
+npx hardhat keystore path
+```
+
+Then run the Sepolia deployment command documented above. Store the keystore backup and its password separately. Use a deployment-only wallet with enough Sepolia ETH for deployment, no mainnet assets, and no long-term administrative role. Keep multisig owner keys on separately controlled devices, preferably hardware wallets. After deployment, verify that `PrismPool`, `ChainlinkOracle`, and `UniswapV3SwapAdapter` are controlled by the multisig.
+
+Before supporting mainnet deployment:
+
+- replace the exportable raw-key signer with a non-exportable hardware wallet, HSM, cloud KMS, or institutional signing service;
+- if AWS is selected, use an `ECC_SECG_P256K1` signing key and restrict its IAM policy to the deployment role and required signing operations;
+- use GitHub Actions OIDC for short-lived AWS access instead of long-lived AWS credentials in GitHub Secrets;
+- protect the deployment environment with branch restrictions, required manual approval, least-privilege permissions, and audited deployment logs;
+- keep the deployer minimally funded and transfer all lasting protocol control to the reviewed multisig;
+- document backup, recovery, compromise response, owner replacement, and key rotation procedures before the first production transaction.
+
+References:
+
+- [Hardhat configuration variables and encrypted keystore](https://blog.nomic.foundation/how-to-manage-config-values-and-secrets-safely-in-hardhat-3/)
+- [AWS KMS secp256k1 signing keys](https://docs.aws.amazon.com/kms/latest/developerguide/symm-asymm-choose-key-spec.html)
+- [GitHub Actions OIDC with AWS](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws)

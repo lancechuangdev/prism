@@ -216,8 +216,6 @@ The deployment order is:
 
 ```mermaid
 flowchart LR
-    Inputs["Prepare external dependencies"]
-    Protocol["Deploy protocol to Sepolia"]
     Manifest["Verify and archive manifest"]
     Image["Build and push backend image"]
     AWS["Apply AWS Terraform stack"]
@@ -225,12 +223,12 @@ flowchart LR
     Services["Roll out API and scheduler"]
     Verify["Verify health, logs, and alarms"]
 
-    Inputs --> Protocol --> Manifest --> Image --> AWS --> Migration --> Services --> Verify
+    Manifest --> Image --> AWS --> Migration --> Services --> Verify
 ```
 
 ## Prerequisites
 
-Install Node.js, Docker, AWS CLI v2, Terraform 1.7 or newer, and `jq`:
+Install Docker, AWS CLI v2, Terraform 1.7 or newer, and `jq`:
 
 ```bash
 aws --version
@@ -288,89 +286,17 @@ export AWS_ACCOUNT_ID="$(
 
 Before starting, obtain or create:
 
-- a funded Sepolia deployment wallet;
-- separately controlled owner addresses and a reviewed threshold for the Prism `ThresholdMultiSig`;
-- Sepolia ERC-20 tokens, compatible Chainlink token/USD feeds, and liquid direct Uniswap V3 pools;
-- the current Sepolia Uniswap V3 `SwapRouter02` and `QuoterV2` addresses;
+- a reviewed and archived Sepolia deployment manifest produced by the protocol deployment guide;
 - a Cognito User Pool, resource-server scopes, and app client;
 - a Route 53 public hosted zone and desired API hostname;
 - a private ECR repository;
 - a protected S3 Terraform-state bucket and the state-locking configuration expected by `terraform/backend.hcl.example`.
 
-The repository does not currently create the Cognito resources, ECR repository, or remote-state backend. The Sepolia protocol deployment creates the Prism multisig and Chainlink oracle used by the backend price service.
+The repository does not currently create the Cognito resources, ECR repository, remote-state backend, or protocol contracts.
 
-## 1. Test the protocol
+## 1. Obtain and verify the protocol deployment
 
-```bash
-cd /home/boris-alienware/projects/prism/protocol
-npm ci
-npm test
-```
-
-## 2. Configure the Sepolia deployment
-
-Keep private values in the current shell or a secure secret manager:
-
-```bash
-export SEPOLIA_RPC_URL="https://..."
-export SEPOLIA_PRIVATE_KEY="0x..."
-export PRISM_MULTISIG_OWNERS='["0xOWNER_1","0xOWNER_2","0xOWNER_3"]'
-export PRISM_MULTISIG_THRESHOLD="2"
-export PRISM_FEE_ADDRESS="0x..."
-export PRISM_UNISWAP_V3_ROUTER="0x..."
-export PRISM_UNISWAP_V3_QUOTER="0x..."
-```
-
-Configure a Chainlink feed for every token the protocol must price:
-
-```bash
-export PRISM_CHAINLINK_FEEDS='[
-  {
-    "token": "0xLEND_TOKEN",
-    "feed": "0xLEND_USD_FEED",
-    "maxStaleness": 7200
-  },
-  {
-    "token": "0xCOLLATERAL_TOKEN",
-    "feed": "0xCOLLATERAL_USD_FEED",
-    "maxStaleness": 7200
-  }
-]'
-```
-
-Derive `maxStaleness` from the selected feed's documented heartbeat plus a reviewed operational margin. Obtain current feed addresses from the official Chainlink feed directory.
-
-Configure every direct swap direction used by repayment or liquidation:
-
-```bash
-export PRISM_UNISWAP_V3_POOLS='[
-  {
-    "tokenIn": "0xCOLLATERAL_TOKEN",
-    "tokenOut": "0xLEND_TOKEN",
-    "fee": 3000
-  },
-  {
-    "tokenIn": "0xLEND_TOKEN",
-    "tokenOut": "0xCOLLATERAL_TOKEN",
-    "fee": 3000
-  }
-]'
-```
-
-Confirm that each pool exists at the configured fee tier and has sufficient Sepolia liquidity. The current adapter supports direct, single-pool routes and does not search automatically for the best route.
-
-See [`../protocol/README.md`](../protocol/README.md) for the adapter constraints and complete protocol behavior.
-
-## 3. Deploy and verify the Sepolia protocol
-
-```bash
-cd /home/boris-alienware/projects/prism/protocol
-npm run deploy:sepolia
-```
-
-The deployment refuses a non-Sepolia RPC, deploys `ThresholdMultiSig` with the configured owners and threshold, verifies configured dependency bytecode, tests the configured Chainlink feeds, transfers oracle and adapter ownership to the multisig, deploys `PrismPool`, and writes `deployments/sepolia.json`.
-
-Verify the generated manifest:
+Deploy and test the contracts by following [`../protocol/README.md`](../protocol/README.md). AWS deployment starts only after that guide has produced `protocol/deployments/sepolia.json`. Recheck the manifest before copying its public addresses into Terraform:
 
 ```bash
 cd /home/boris-alienware/projects/prism
@@ -405,7 +331,7 @@ export PRISM_PRICE_TOKEN_ADDRESSES="$(
 
 Review and archive `protocol/deployments/sepolia.json` as a deployment artifact.
 
-## 4. Create AWS runtime secrets
+## 2. Create AWS runtime secrets
 
 Create Secrets Manager secrets whose values are raw strings, not JSON documents:
 
@@ -435,7 +361,7 @@ Store the generated Redis value in an approved credential manager before clearin
 
 To enable automatic liquidation, create a separate low-balance keeper wallet, store its private key as a raw Secrets Manager value, set `liquidation_enabled=true` and `liquidation_private_key_secret_arn` in Terraform, and have the existing multisig execute `PrismPool.setLiquidator(keeperAddress)`. Apply infrastructure only after the on-chain authorization is confirmed. The keeper key is injected only into the scheduler task.
 
-## 5. Build and push the backend image
+## 3. Build and push the backend image
 
 Create the ECR repository once:
 
@@ -483,7 +409,7 @@ export IMAGE_URI="${IMAGE_REPOSITORY}@${IMAGE_DIGEST}"
 echo "$IMAGE_URI"
 ```
 
-## 6. Configure Terraform
+## 4. Configure Terraform
 
 The S3 state bucket and locking resource must exist before initialization. The final production blocker in `../backend/README.md` documents the remaining state-store hardening work; do not silently replace the configured S3 backend with local production state.
 
@@ -538,7 +464,7 @@ prism/proposals.write
 prism/admin.read
 ```
 
-## 7. Plan and deploy AWS
+## 5. Plan and deploy AWS
 
 ```bash
 terraform init -backend-config=backend.hcl
@@ -563,7 +489,7 @@ register migration task revision
 
 A failed migration stops the apply before either service rollout. See [`terraform/README.md`](terraform/README.md) for the Terraform architecture, Redis secret flow, monitoring, and migration-gate details.
 
-## 8. Verify the deployment
+## 6. Verify the deployment
 
 Confirm the SNS email subscription sent by AWS, then retrieve the API URL:
 
@@ -606,40 +532,3 @@ Verify all of the following:
 - the CloudWatch alarms are not unexpectedly firing.
 
 Do not create a production pool until its token contracts, oracle feeds, maximum staleness, Uniswap pool liquidity, position-token isolation, multisig owners, and threshold have all been reviewed.
-
-## TODO: Harden deployment-key management
-
-The current Hardhat configuration accepts `SEPOLIA_PRIVATE_KEY` as a configuration variable. Do not keep a plaintext private key in a committed file, shell script, command history, CI log, or shared chat.
-
-For local Sepolia deployments, migrate the RPC URL and dedicated, low-balance deployment key from plaintext environment variables to Hardhat's encrypted keystore:
-
-```bash
-cd /home/boris-alienware/projects/prism/protocol
-
-npx hardhat keystore set SEPOLIA_PRIVATE_KEY
-npx hardhat keystore set SEPOLIA_RPC_URL
-
-unset SEPOLIA_PRIVATE_KEY
-unset SEPOLIA_RPC_URL
-
-npx hardhat keystore list
-npx hardhat keystore path
-npm run deploy:sepolia
-```
-
-Store the keystore backup and its password separately. Use a deployment-only wallet with enough Sepolia ETH for deployment, no mainnet assets, and no long-term administrative role. Keep multisig owner keys on separately controlled devices, preferably hardware wallets. After deployment, verify that `PrismPool`, `ChainlinkOracle`, and `UniswapV3SwapAdapter` are controlled by the multisig.
-
-Before supporting mainnet deployment:
-
-- replace the exportable raw-key signer with a non-exportable hardware wallet, HSM, cloud KMS, or institutional signing service;
-- if AWS is selected, use an `ECC_SECG_P256K1` signing key and restrict its IAM policy to the deployment role and required signing operations;
-- use GitHub Actions OIDC for short-lived AWS access instead of long-lived AWS credentials in GitHub Secrets;
-- protect the deployment environment with branch restrictions, required manual approval, least-privilege permissions, and audited deployment logs;
-- keep the deployer minimally funded and transfer all lasting protocol control to the reviewed multisig;
-- document backup, recovery, compromise response, owner replacement, and key rotation procedures before the first production transaction.
-
-References:
-
-- [Hardhat configuration variables and encrypted keystore](https://blog.nomic.foundation/how-to-manage-config-values-and-secrets-safely-in-hardhat-3/)
-- [AWS KMS secp256k1 signing keys](https://docs.aws.amazon.com/kms/latest/developerguide/symm-asymm-choose-key-spec.html)
-- [GitHub Actions OIDC with AWS](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws)
