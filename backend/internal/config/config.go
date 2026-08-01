@@ -132,6 +132,7 @@ func readMySQLDSN() string {
 		DBName:    database,
 		ParseTime: true,
 		Loc:       time.UTC,
+		AllowNativePasswords: true,
 		Params: map[string]string{
 			"charset": "utf8mb4",
 		},
