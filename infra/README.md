@@ -13,6 +13,8 @@ flowchart TB
     Certificate["ACM<br/>TLS certificate"]
 
     subgraph Region["AWS Region"]
+        Cognito["Cognito User Pool<br/>login and access tokens"]
+
         subgraph VPC["Prism VPC"]
             subgraph Public["Public subnets"]
                 ALB["Application Load Balancer<br/>HTTPS :443"]
@@ -40,10 +42,15 @@ flowchart TB
 
     RPC["Sepolia RPC provider<br/>pool and ChainlinkOracle reads"]
 
-    Client --> DNS --> ALB
+    Client -->|"sign in"| Cognito
+    Cognito -->|"scoped access token"| Client
+    Client -->|"Bearer access token"| DNS --> ALB
     Certificate -. "certificate" .-> ALB
     ALB --> API1
     ALB --> API2
+
+    API1 -. "validate signature, claims,<br/>and scopes using JWKS" .-> Cognito
+    API2 -. "validate signature, claims,<br/>and scopes using JWKS" .-> Cognito
 
     API1 --> DB1
     API2 --> DB1
@@ -92,6 +99,10 @@ The stack creates one NAT gateway per AZ so both zones do not depend on a gatewa
 Route 53 maps the API hostname to the Application Load Balancer. AWS Certificate Manager, or ACM, provisions and renews the TLS certificate proving control of that hostname. The load balancer's HTTPS listener references the certificate ARN and accepts public traffic on port 443.
 
 TLS terminates at the load balancer. It decrypts the request and forwards HTTP to port 8080 on a private API task. The Go service therefore does not store the public certificate or implement certificate renewal.
+
+### Cognito authentication
+
+Cognito authenticates users and issues JWT access tokens; Prism does not handle user passwords in production. Clients send the access token as `Authorization: Bearer <token>`. The API downloads the User Pool's rotating public keys and validates the RS256 signature, issuer, app-client ID, `token_use=access`, expiry, and subject. It then requires `prism/proposals.write` for proposal creation and `prism/admin.read` for the admin session endpoint. ID and refresh tokens are not accepted as API credentials.
 
 ## How Terraform represents the architecture
 
@@ -142,14 +153,14 @@ terraform {
 `backend.hcl` supplies the deployment-specific location:
 
 ```hcl
-bucket         = "prism-terraform-state"
-key            = "production/terraform.tfstate"
-region         = "us-west-2"
-encrypt        = true
-dynamodb_table = "prism-terraform-locks"
+bucket       = "prism-terraform-state"
+key          = "production/terraform.tfstate"
+region       = "us-west-2"
+encrypt      = true
+use_lockfile = true
 ```
 
-The bucket and lock table must exist before `terraform init`. The remaining production TODO covers creating and hardening those bootstrap resources.
+The bucket must exist before `terraform init`. Terraform stores the state at `key` and coordinates concurrent operations with an S3 lock file at `<key>.tflock`.
 
 ### Terraform Core and the AWS provider
 
@@ -379,13 +390,16 @@ Authenticate Docker, build the image, and push a Git-derived immutable tag:
 export ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 export IMAGE_REPOSITORY="${ECR_REGISTRY}/prism/backend"
 
+# This pipe authenticates Docker to an ECR container registry
 aws ecr get-login-password --region "$AWS_REGION" |
 docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
 cd /home/boris-alienware/projects/prism
-export IMAGE_TAG="$(git rev-parse --short=12 HEAD)"
+export IMAGE_TAG="$(git rev-parse --short=12 HEAD)-$(date -u +%Y%m%d%H%M%S)"
 
 docker build \
+  --no-cache \
+  --pull \
   --platform linux/amd64 \
   --file backend/Dockerfile \
   --tag "${IMAGE_REPOSITORY}:${IMAGE_TAG}" \
@@ -411,7 +425,87 @@ echo "$IMAGE_URI"
 
 ## 4. Configure Terraform
 
-The S3 state bucket and locking resource must exist before initialization. The final production blocker in `../backend/README.md` documents the remaining state-store hardening work; do not silently replace the configured S3 backend with local production state.
+```mermaid
+flowchart TD
+    Command1["terraform init<br/>-backend-config=backend.hcl"]
+    BackendTF["backend.tf<br/>backend type = S3"]
+    BackendHCL["backend.hcl<br/>bucket, key, region, lockfile"]
+    S3["S3 bucket<br/>production/terraform.tfstate<br/>production/terraform.tfstate.tflock"]
+
+    Command2["terraform plan / apply"]
+    VariablesTF["variables.tf<br/>declares accepted inputs"]
+    TFVars["terraform.tfvars<br/>deployment values"]
+    AWS["AWS resources<br/>ECS, RDS, ALB, Redis, etc."]
+
+    BackendTF --> Command1
+    BackendHCL --> Command1
+    Command1 -->|"configures backend"| S3
+
+    VariablesTF --> Command2
+    TFVars --> Command2
+    S3 -->|"read current state"| Command2
+    Command2 -->|"create or update"| AWS
+    Command2 -->|"write updated state"| S3
+```
+Register a domain in **Route 53 > Registered domains > Register domains**, submit the request, and complete any emailed contact verification. After AWS approves the request, find the automatically created public hosted zone:
+
+```bash
+export ROOT_DOMAIN="prismapp.link"
+aws route53 list-hosted-zones-by-name \
+  --dns-name "$ROOT_DOMAIN" \
+  --query "HostedZones[?Name=='${ROOT_DOMAIN}.'].Id | [0]" \
+  --output text
+```
+
+Use the returned ID without the `/hostedzone/` prefix (for example, `Z0123456789ABC`) as `route53_zone_id`, and use an API subdomain such as `api.prismapp.link` as `domain_name`. Do not create a second hosted zone if registration already created one.
+
+### Configure Cognito
+
+In **Amazon Cognito > User pools**, create a pool and an app client. For a browser or mobile client, do not generate a client secret. Create a resource server with identifier `prism`, add scopes `proposals.write` and `admin.read`, and allow the app client to request both scopes. Configure the app client's callback, sign-out URLs and enable the scopes for the frontend. Cognito handles sign-in and token refresh; the frontend must send the resulting access token to Prism.
+
+Retrieve the Terraform values:
+
+```bash
+aws cognito-idp list-user-pools \
+  --max-results 60 \
+  --region "$AWS_REGION" \
+  --query 'UserPools[].{Name:Name,Id:Id}' \
+  --output table
+
+aws cognito-idp list-user-pool-clients \
+  --user-pool-id "<USER_POOL_ID>" \
+  --region "$AWS_REGION" \
+  --query 'UserPoolClients[].{Name:ClientName,Id:ClientId}' \
+  --output table
+```
+
+Set `cognito_region` to the pool's Region, `cognito_user_pool_id` to the pool ID, and `cognito_client_id` to the app-client ID—not its secret.
+
+### Bootstrap remote state
+
+Create the globally unique, versioned, encrypted, non-public S3 state bucket:
+
+```bash
+export TF_STATE_BUCKET="prism-terraform-state-${AWS_ACCOUNT_ID}"
+
+aws s3api create-bucket \
+  --bucket "$TF_STATE_BUCKET" \
+  --region "$AWS_REGION" \
+  --create-bucket-configuration LocationConstraint="$AWS_REGION"
+aws s3api put-bucket-versioning \
+  --bucket "$TF_STATE_BUCKET" \
+  --versioning-configuration Status=Enabled
+aws s3api put-bucket-encryption \
+  --bucket "$TF_STATE_BUCKET" \
+  --server-side-encryption-configuration \
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+aws s3api put-public-access-block \
+  --bucket "$TF_STATE_BUCKET" \
+  --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+```
+
+This bootstrap bucket must exist before initialization. With `use_lockfile = true`, Terraform creates and removes `<key>.tflock` in the same bucket; no DynamoDB table is required. Do not silently replace the configured S3 backend with local production state.
 
 ```bash
 cd /home/boris-alienware/projects/prism/infra/terraform
@@ -419,7 +513,19 @@ cp backend.hcl.example backend.hcl
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Fill `backend.hcl` with the real state bucket, state key, Region, encryption setting, and locking resource.
+`backend.hcl` configures Terraform itself—where remote state is stored and locked—and is read by `terraform init -backend-config=backend.hcl`. `terraform.tfvars` configures the Prism deployment—such as its Region, image, domain, contracts, and Cognito IDs—and is loaded automatically by `terraform plan` and `terraform apply`. Both files are account/environment-specific and must not be committed.
+
+Set `backend.hcl` to the created resources; Terraform creates and manages the state object at `key`:
+
+```hcl
+bucket       = "prism-terraform-state-ACCOUNT_ID"
+key          = "production/terraform.tfstate"
+region       = "us-west-2"
+encrypt      = true
+use_lockfile = true
+```
+
+The final production blocker in `../backend/README.md` documents the remaining state-store hardening work.
 
 Fill every value in `terraform.tfvars`, including:
 
@@ -472,6 +578,7 @@ terraform fmt -check -recursive
 terraform validate
 terraform plan -out=tfplan
 terraform show tfplan
+terraform show -no-color tfplan > tfplan.txt # if the plan is longer than the terminal's scrollback
 terraform apply tfplan
 ```
 
@@ -532,3 +639,75 @@ Verify all of the following:
 - the CloudWatch alarms are not unexpectedly firing.
 
 Do not create a production pool until its token contracts, oracle feeds, maximum staleness, Uniswap pool liquidity, position-token isolation, multisig owners, and threshold have all been reviewed.
+
+## Review a saved Terraform plan
+
+Render the plan once, inspect its summary, and list every non-no-op resource action:
+
+```bash
+terraform show -no-color tfplan > tfplan.txt
+tail -n 30 tfplan.txt
+terraform show -json tfplan |
+jq -r '.resource_changes[] | select(.change.actions != ["no-op"]) | "\(.change.actions | join(","))\t\(.address)"'
+```
+
+Review these points before `terraform apply tfplan`:
+
+1. Confirm the AWS identity, Region, and environment:
+
+   ```bash
+   aws sts get-caller-identity
+   terraform show -json tfplan |
+   jq '{aws_region: .variables.aws_region.value, environment: .variables.environment.value}'
+   ```
+
+2. Reject unexpected deletes or replacements. A first deployment should normally contain creates and no destroys:
+
+   ```bash
+   rg -n -C 3 'must be replaced|will be destroyed|Plan:' tfplan.txt
+   ```
+
+3. Review IAM roles, attachments, and inline policies for broad actions or resources:
+
+   ```bash
+   rg -n -C 8 'aws_iam_|Action.*\*|Resource.*\*' tfplan.txt
+   ```
+
+4. Review public networking and ensure only the intended ALB ports are internet-accessible:
+
+   ```bash
+   rg -n -C 8 'aws_security_group|aws_lb|aws_wafv2|0\.0\.0\.0/0|::/0' tfplan.txt
+   ```
+
+5. Review the principal recurring-cost resources and confirm their sizes and counts:
+
+   ```bash
+   rg -n -C 8 'aws_nat_gateway|aws_db_instance|aws_elasticache|aws_ecs_service|aws_lb' tfplan.txt
+   ```
+
+6. Confirm the image, domain, Cognito IDs, and contract addresses match the intended deployment:
+
+   ```bash
+   terraform show -json tfplan |
+   jq '.variables | {
+     image_uri: .image_uri.value,
+     domain_name: .domain_name.value,
+     route53_zone_id: .route53_zone_id.value,
+     cognito_region: .cognito_region.value,
+     cognito_user_pool_id: .cognito_user_pool_id.value,
+     cognito_client_id: .cognito_client_id.value,
+     chain_id: .chain_id.value,
+     pool_address: .pool_address.value,
+     multisig_address: .multisig_address.value,
+     oracle_address: .oracle_address.value
+   }'
+   ```
+
+7. Review planned outputs and all warnings:
+
+   ```bash
+   terraform show -json tfplan | jq '.planned_values.outputs'
+   rg -n -C 3 '^Warning:|^Error:' tfplan.txt
+   ```
+
+Saved binary, text, and JSON plans can contain sensitive values. Do not commit them; remove review artifacts after use.

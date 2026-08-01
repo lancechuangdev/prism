@@ -57,7 +57,7 @@ flowchart LR
 
 Do not bypass this ordering with `terraform apply -target=aws_ecs_service.api`, `terraform apply -target=aws_ecs_service.scheduler`, or direct `aws ecs update-service` commands. The deployment identity needs permission to run, describe, and wait for ECS tasks in addition to its Terraform permissions.
 
-The stack requires an encrypted, access-controlled S3 remote backend rather than silently creating local production state. The state bucket and lock table are bootstrap resources and must exist before `terraform init`. Rotating the RPC secret requires replacing the running ECS tasks so they resolve the new version. Rotating the Redis token also requires a reviewed Terraform plan to update ElastiCache.
+The stack requires an encrypted, access-controlled S3 remote backend rather than silently creating local production state. The state bucket is a bootstrap resource and must exist before `terraform init`; Terraform coordinates concurrent operations with an S3 lock file. Rotating the RPC secret requires replacing the running ECS tasks so they resolve the new version. Rotating the Redis token also requires a reviewed Terraform plan to update ElastiCache.
 
 The scheduler ECS service deliberately runs one replica. Its rolling-deployment bounds are 0% minimum healthy and 100% maximum, so ECS stops the old scheduler before starting its replacement instead of briefly running two schedulers. Scheduler synchronization pauses during that replacement. Do not start standalone scheduler tasks or create a second scheduler service; use a distributed lock before introducing scheduler redundancy or zero-downtime overlap.
 
