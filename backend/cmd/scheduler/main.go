@@ -71,7 +71,7 @@ func main() {
 	priceProvider := price.NewCachedQuoteProvider(upstreamPriceProvider, cacheStore, cfg.PriceCacheTTL)
 	priceService := price.NewService(priceProvider)
 
-	var liquidationService *liquidation.Service
+	var liquidationChecker scheduler.LiquidationChecker
 	if cfg.LiquidationEnabled {
 		liquidationChain, err := liquidation.NewRPCChain(
 			ctx,
@@ -86,9 +86,9 @@ func main() {
 			os.Exit(1)
 		}
 		defer liquidationChain.Close()
-		liquidationService = liquidation.NewService(liquidationChain, logger)
+		liquidationChecker = liquidation.NewService(liquidationChain, logger)
 	}
-	syncer := scheduler.NewPoolSyncer(reader, repo, cfg.ChainID, priceService, cfg.PriceSymbol, liquidationService, logger)
+	syncer := scheduler.NewPoolSyncer(reader, repo, cfg.ChainID, priceService, cfg.PriceSymbol, liquidationChecker, logger)
 
 	logger.Info(
 		"scheduler starting",
