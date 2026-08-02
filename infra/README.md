@@ -913,8 +913,30 @@ the state object or accessing historical object versions. Update its bucket and
 key ARNs if `backend.hcl` changes.
 
 State and ECR access still do not authorize Terraform to inspect or update the
-AWS resources represented by that state. Attach the separate, reviewed
-customer-managed infrastructure deployment policy:
+AWS resources represented by that state. For backend-only releases, attach the
+repository's release policy:
+
+```bash
+jq empty infra/iam/github-actions-backend-release-policy.json
+
+aws iam put-role-policy \
+  --profile "$AWS_PROFILE" \
+  --role-name prism-github-deploy \
+  --policy-name PrismBackendRelease \
+  --policy-document file://infra/iam/github-actions-backend-release-policy.json
+```
+
+This policy permits Terraform to refresh metadata for the existing stack, read
+the Redis token required to configure ElastiCache, register and retire Prism
+task-definition revisions, run the migration task only in the Prism production
+cluster, update only the API and scheduler services, and pass only their two ECS
+roles. It does not authorize infrastructure creation, deletion, or mutation
+outside that backend release path. Consequently, unexpected infrastructure
+drift or a Terraform change requiring other mutations fails closed.
+
+If GitHub Actions will also deploy intentional infrastructure changes, use a
+separate protected workflow and attach a separately reviewed customer-managed
+infrastructure deployment policy to its role:
 
 ```bash
 export PRISM_DEPLOY_POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/replace-with-prism-deployment-policy"

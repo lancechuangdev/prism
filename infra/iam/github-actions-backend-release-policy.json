@@ -1,0 +1,98 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "RefreshTerraformManagedInfrastructure",
+      "Effect": "Allow",
+      "Action": [
+        "acm:Describe*",
+        "acm:Get*",
+        "acm:List*",
+        "application-autoscaling:Describe*",
+        "application-autoscaling:List*",
+        "cloudwatch:Describe*",
+        "cloudwatch:Get*",
+        "cloudwatch:List*",
+        "ec2:Describe*",
+        "ecs:Describe*",
+        "ecs:List*",
+        "elasticache:Describe*",
+        "elasticache:List*",
+        "elasticloadbalancing:Describe*",
+        "iam:Get*",
+        "iam:List*",
+        "logs:Describe*",
+        "logs:Get*",
+        "logs:List*",
+        "rds:Describe*",
+        "rds:List*",
+        "route53:Get*",
+        "route53:List*",
+        "sns:Get*",
+        "sns:List*",
+        "wafv2:Get*",
+        "wafv2:List*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadRedisConfigurationSecret",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": "arn:aws:secretsmanager:us-west-2:448079093324:secret:prism/production/redis-auth-*"
+    },
+    {
+      "Sid": "RegisterPrismTaskDefinitions",
+      "Effect": "Allow",
+      "Action": "ecs:RegisterTaskDefinition",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManagePrismTaskDefinitionRevisions",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DeregisterTaskDefinition",
+        "ecs:TagResource",
+        "ecs:UntagResource"
+      ],
+      "Resource": "arn:aws:ecs:us-west-2:448079093324:task-definition/prism-production-*:*"
+    },
+    {
+      "Sid": "DeployPrismServices",
+      "Effect": "Allow",
+      "Action": "ecs:UpdateService",
+      "Resource": [
+        "arn:aws:ecs:us-west-2:448079093324:service/prism-production/prism-production-api",
+        "arn:aws:ecs:us-west-2:448079093324:service/prism-production/prism-production-scheduler"
+      ]
+    },
+    {
+      "Sid": "RunPrismMigration",
+      "Effect": "Allow",
+      "Action": "ecs:RunTask",
+      "Resource": "arn:aws:ecs:us-west-2:448079093324:task-definition/prism-production-migration:*",
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:aws:ecs:us-west-2:448079093324:cluster/prism-production"
+        }
+      }
+    },
+    {
+      "Sid": "PassPrismTaskRoles",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": [
+        "arn:aws:iam::448079093324:role/prism-production-execution",
+        "arn:aws:iam::448079093324:role/prism-production-task"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "ecs-tasks.amazonaws.com"
+        }
+      }
+    }
+  ]
+}
