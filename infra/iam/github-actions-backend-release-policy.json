@@ -51,10 +51,9 @@
       "Resource": "*"
     },
     {
-      "Sid": "ManagePrismTaskDefinitionRevisions",
+      "Sid": "TagPrismTaskDefinitionRevisions",
       "Effect": "Allow",
       "Action": [
-        "ecs:DeregisterTaskDefinition",
         "ecs:TagResource",
         "ecs:UntagResource"
       ],

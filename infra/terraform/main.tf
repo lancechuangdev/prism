@@ -378,6 +378,7 @@ resource "aws_iam_role" "task" {
 
 resource "aws_ecs_task_definition" "api" {
   family                   = "${local.name}-api"
+  skip_destroy             = true
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 512
@@ -409,6 +410,7 @@ resource "aws_ecs_task_definition" "api" {
 
 resource "aws_ecs_task_definition" "scheduler" {
   family                   = "${local.name}-scheduler"
+  skip_destroy             = true
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 256
@@ -436,6 +438,7 @@ resource "aws_ecs_task_definition" "scheduler" {
 
 resource "aws_ecs_task_definition" "migration" {
   family                   = "${local.name}-migration"
+  skip_destroy             = true
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 256

@@ -927,12 +927,20 @@ aws iam put-role-policy \
 ```
 
 This policy permits Terraform to refresh metadata for the existing stack, read
-the Redis token required to configure ElastiCache, register and retire Prism
-task-definition revisions, run the migration task only in the Prism production
-cluster, update only the API and scheduler services, and pass only their two ECS
-roles. It does not authorize infrastructure creation, deletion, or mutation
-outside that backend release path. Consequently, unexpected infrastructure
-drift or a Terraform change requiring other mutations fails closed.
+the Redis token required to configure ElastiCache, register Prism task-definition
+revisions, run the migration task only in the Prism production cluster, update
+only the API and scheduler services, and pass only their two ECS roles. It does
+not authorize infrastructure creation, deletion, or mutation outside that
+backend release path. Consequently, unexpected infrastructure drift or a
+Terraform change requiring other mutations fails closed.
+
+The task definitions set `skip_destroy = true`. Backend releases therefore keep
+older inactive revisions available for rollback and do not require the
+account-wide `ecs:DeregisterTaskDefinition` permission that ECS uses when a
+revision is retired by family identifier. Registration itself has an AWS
+resource-level limitation and requires `Resource: "*"`; service updates,
+migration execution, role passing, secret reads, ECR access, state access, and
+task-definition tagging remain resource-scoped.
 
 If GitHub Actions will also deploy intentional infrastructure changes, use a
 separate protected workflow and attach a separately reviewed customer-managed
