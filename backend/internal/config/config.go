@@ -125,13 +125,13 @@ func readMySQLDSN() string {
 	port := readEnv("PRISM_MYSQL_PORT", "3306")
 	database := readEnv("PRISM_MYSQL_DATABASE", "prism")
 	return (&mysql.Config{
-		User:      username,
-		Passwd:    password,
-		Net:       "tcp",
-		Addr:      host + ":" + port,
-		DBName:    database,
-		ParseTime: true,
-		Loc:       time.UTC,
+		User:                 username,
+		Passwd:               password,
+		Net:                  "tcp",
+		Addr:                 host + ":" + port,
+		DBName:               database,
+		ParseTime:            true,
+		Loc:                  time.UTC,
 		AllowNativePasswords: true,
 		Params: map[string]string{
 			"charset": "utf8mb4",
