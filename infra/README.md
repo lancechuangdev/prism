@@ -711,3 +711,270 @@ Review these points before `terraform apply tfplan`:
    ```
 
 Saved binary, text, and JSON plans can contain sensitive values. Do not commit them; remove review artifacts after use.
+
+## GitHub Actions backend deployment
+
+The backend workflows run only when backend code changes (or when their own
+workflow files change):
+
+- `backend-ci.yml` checks formatting, runs all Go tests, and builds the API,
+  scheduler, and migration commands for pull requests; the deployment workflow
+  reuses the same CI job after a backend change reaches `main`.
+- `backend-deploy.yml` repeats CI, builds an immutable Docker image, pushes it
+  to ECR, passes its digest to Terraform, runs the existing migration gate, and
+  rolls out the API and scheduler ECS services. It can also be started manually.
+
+### 1. Prepare the existing AWS deployment prerequisites
+
+GitHub Actions deploys the same Terraform stack described above; it does not
+bootstrap production from an empty account. Complete the manual prerequisites
+first:
+
+- create the private `prism/backend` ECR repository;
+- create and protect the S3 Terraform-state bucket;
+- complete `backend.hcl` and `terraform.tfvars` locally and successfully run at
+  least `terraform init`, `terraform validate`, and `terraform plan`;
+- create the referenced Secrets Manager secrets, Cognito resources, hosted
+  zone, and verified protocol deployment;
+- ensure the deployment identity can run the ECS migration task as well as
+  update the Terraform-managed infrastructure.
+
+The workflow never receives raw RPC, Redis, database, or keeper credentials.
+It receives the Secrets Manager ARNs stored in `terraform.tfvars`, and ECS
+retrieves the corresponding values at task startup.
+
+### 2. Add GitHub as an AWS OIDC provider
+
+Authenticate to the intended AWS account with a non-root administrative or
+bootstrap identity:
+
+```bash
+export AWS_PROFILE=prism-deploy
+export AWS_REGION=us-west-2
+export AWS_ACCOUNT_ID="$(
+  aws sts get-caller-identity \
+    --profile "$AWS_PROFILE" \
+    --query Account \
+    --output text
+)"
+
+aws sts get-caller-identity --profile "$AWS_PROFILE"
+```
+
+Do not continue if this is the wrong account or the returned ARN ends in
+`:root`. Check whether the account already trusts GitHub Actions:
+
+```bash
+export GITHUB_OIDC_PROVIDER_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
+
+aws iam get-open-id-connect-provider \
+  --profile "$AWS_PROFILE" \
+  --open-id-connect-provider-arn "$GITHUB_OIDC_PROVIDER_ARN"
+```
+
+If that command reports `NoSuchEntity`, create the provider once per AWS
+account:
+
+```bash
+aws iam create-open-id-connect-provider \
+  --profile "$AWS_PROFILE" \
+  --url "https://token.actions.githubusercontent.com" \
+  --client-id-list "sts.amazonaws.com"
+```
+
+The console equivalent is **IAM > Identity providers > Add provider > OpenID
+Connect**, with provider URL `https://token.actions.githubusercontent.com` and
+audience `sts.amazonaws.com`.
+
+### 3. Create the GitHub deployment IAM role
+
+Set the exact, case-sensitive GitHub owner and repository names:
+
+```bash
+export GITHUB_OWNER="replace-with-github-user-or-organization"
+export GITHUB_REPOSITORY="prism"
+```
+
+Create `github-actions-trust-policy.json` with the following contents:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::AWS_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": "repo:GITHUB_OWNER/GITHUB_REPOSITORY:environment:production"
+        }
+      }
+    }
+  ]
+}
+```
+
+Replace all three placeholders. The `sub` value uses `environment:production`
+because the deployment job declares `environment: production`; a branch-based
+subject such as `ref:refs/heads/main` will not match this workflow. Validate the
+file and create the role:
+
+```bash
+jq empty github-actions-trust-policy.json
+
+aws iam create-role \
+  --profile "$AWS_PROFILE" \
+  --role-name prism-github-deploy \
+  --assume-role-policy-document file://github-actions-trust-policy.json
+```
+
+The `file://` prefix is required. Without it, the AWS CLI interprets the file
+name itself as JSON and returns `MalformedPolicyDocument`. Retrieve the role ARN:
+
+```bash
+export AWS_ROLE_ARN="$(
+  aws iam get-role \
+    --profile "$AWS_PROFILE" \
+    --role-name prism-github-deploy \
+    --query 'Role.Arn' \
+    --output text
+)"
+
+echo "$AWS_ROLE_ARN"
+```
+
+If the role already exists, update its trust policy instead of creating it:
+
+```bash
+aws iam update-assume-role-policy \
+  --profile "$AWS_PROFILE" \
+  --role-name prism-github-deploy \
+  --policy-document file://github-actions-trust-policy.json
+```
+
+### 4. Grant the role deployment permissions
+
+The trust policy only answers *who may assume the role*; it grants no AWS
+resource access. Attach a reviewed customer-managed deployment policy:
+
+```bash
+export PRISM_DEPLOY_POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/replace-with-prism-deployment-policy"
+
+aws iam attach-role-policy \
+  --profile "$AWS_PROFILE" \
+  --role-name prism-github-deploy \
+  --policy-arn "$PRISM_DEPLOY_POLICY_ARN"
+```
+
+The policy must allow pushing and reading images in `prism/backend`, reading and
+locking the production S3 Terraform state, and the create/read/update/delete
+operations required by this Terraform stack for ECS, EC2 networking, ALB,
+Route 53, ACM, WAF, RDS, ElastiCache, CloudWatch, SNS, Secrets Manager metadata,
+Application Auto Scaling, and the Terraform-managed IAM roles and policies. It
+must also allow `ecs:RunTask`, `ecs:DescribeTasks`, and the related ECS wait and
+network-description calls used by `scripts/run-migration.sh`.
+
+There is no account-independent least-privilege policy ARN that can safely be
+copied into this guide: resource ARNs include the account, Region, state bucket,
+hosted zone, cluster, roles, and secrets. Start with the reviewed permissions
+used by the existing non-root Terraform deployment identity, scope them to the
+production resources, and validate them in a non-production account. Do not
+store AWS access keys in GitHub and do not leave `AdministratorAccess` attached
+to this role.
+
+### 5. Configure the GitHub production environment
+
+In **Repository settings > Environments**, create an environment named
+`production`. Add required reviewers if production deployments should pause
+for approval.
+
+Add these environment variables:
+
+| Name | Example |
+| --- | --- |
+| `AWS_REGION` | `us-west-2` |
+| `ECR_REPOSITORY` | `prism/backend` |
+| `AWS_ROLE_ARN` | `arn:aws:iam::123456789012:role/prism-github-deploy` |
+
+Add these environment secrets:
+
+| Name | Contents |
+| --- | --- |
+| `TF_BACKEND_HCL` | The complete contents of the production `backend.hcl` |
+| `TFVARS` | The complete contents of the production `terraform.tfvars` |
+
+Neither secret should contain AWS access keys, RPC URLs, Redis tokens, database
+passwords, or the liquidation private key. The Terraform configuration expects
+Secrets Manager ARNs for runtime secrets.
+
+The `TFVARS` secret contains the complete production `terraform.tfvars`. Its
+`image_uri` value is only a syntactically valid fallback. Every workflow run
+builds and pushes a new image, resolves its immutable ECR digest, and exports
+that value as `TF_VAR_image_uri`; Terraform gives that environment variable
+precedence over `terraform.tfvars`. No manual `image_uri` update is required.
+
+Environment secrets are unavailable to private repositories on GitHub Free.
+For such a repository, upgrade to a plan that supports them or add the same
+names under **Settings > Secrets and variables > Actions** as repository-level
+secrets and variables. The workflow resolves those names at either level while
+still using the `production` environment in its OIDC subject.
+
+Do not add long-lived `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY` repository
+secrets. The workflow exchanges GitHub's short-lived OIDC token for temporary
+AWS role credentials.
+
+### 6. Verify configuration and perform the first run
+
+Before triggering a deployment, verify the role configuration:
+
+```bash
+aws iam get-role \
+  --profile "$AWS_PROFILE" \
+  --role-name prism-github-deploy \
+  --query '{Arn:Role.Arn,Trust:Role.AssumeRolePolicyDocument}'
+
+aws iam list-attached-role-policies \
+  --profile "$AWS_PROFILE" \
+  --role-name prism-github-deploy
+```
+
+1. Protect the `main` branch and require the **Backend CI** check.
+2. Configure the production environment variables and secrets above.
+3. Confirm the ECR repository and Terraform remote-state bucket already exist.
+4. Run **Deploy backend to AWS** manually from the Actions tab.
+5. Approve the protected environment when prompted. Approval occurs before the
+   deployment job; the current workflow logs the Terraform plan and then applies
+   it automatically without a second approval gate.
+6. Confirm that the migration succeeds, both ECS services stabilize, and
+   `/readyz` returns successfully.
+
+After that first verification, a pull request changing `backend/**` runs CI.
+Merging it to `main` runs CI again and, if successful, performs the production
+deployment. `workflow_dispatch` remains available for an intentional manual
+rerun. If role assumption fails, compare the repository owner, repository name,
+environment name, audience, and `sub` claim in the role trust policy exactly;
+OIDC matching is case-sensitive.
+
+Production deployments are serialized with the `prism-production` concurrency
+group. A newer push waits for an active deployment instead of canceling it.
+
+## Temporarily Disable Prism Services
+
+Scale both ECS services to zero:
+```
+aws ecs update-service \
+  --cluster prism-production \
+  --service prism-production-api \
+  --desired-count 0 \
+  --region "$AWS_REGION"
+
+aws ecs update-service \
+  --cluster prism-production \
+  --service prism-production-scheduler \
+  --desired-count 0 \
+  --region "$AWS_REGION"
+```

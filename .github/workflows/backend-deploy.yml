@@ -1,0 +1,157 @@
+name: Deploy backend to AWS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: prism-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Test backend
+    uses: ./.github/workflows/backend-ci.yml
+
+  deploy:
+    name: Build, migrate, and deploy
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Configure short-lived AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Verify deployment identity and configuration
+        shell: bash
+        run: |
+          test -n "$AWS_REGION"
+          test -n "$ECR_REPOSITORY"
+          aws sts get-caller-identity
+
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push immutable image
+        id: image
+        shell: bash
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          # Include the run identifiers so a retry can push to an immutable ECR
+          # repository even if an earlier attempt already published its tag.
+          image_tag="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          image_repository="${ECR_REGISTRY}/${ECR_REPOSITORY}"
+
+          docker build \
+            --pull \
+            --platform linux/amd64 \
+            --file backend/Dockerfile \
+            --tag "${image_repository}:${image_tag}" \
+            backend
+          docker push "${image_repository}:${image_tag}"
+
+          image_digest="$(
+            aws ecr describe-images \
+              --region "$AWS_REGION" \
+              --repository-name "$ECR_REPOSITORY" \
+              --image-ids "imageTag=${image_tag}" \
+              --query 'imageDetails[0].imageDigest' \
+              --output text
+          )"
+          if [[ ! "$image_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "ECR returned an invalid image digest: $image_digest" >&2
+            exit 1
+          fi
+
+          image_uri="${image_repository}@${image_digest}"
+          echo "image_uri=${image_uri}" >> "$GITHUB_OUTPUT"
+          echo "Built ${image_uri}"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.15.5"
+          terraform_wrapper: false
+
+      - name: Materialize protected Terraform configuration
+        working-directory: infra/terraform
+        shell: bash
+        env:
+          BACKEND_HCL_CONTENT: ${{ secrets.TF_BACKEND_HCL }}
+          TFVARS_CONTENT: ${{ secrets.TFVARS }}
+        run: |
+          test -n "$BACKEND_HCL_CONTENT"
+          test -n "$TFVARS_CONTENT"
+          printf '%s\n' "$BACKEND_HCL_CONTENT" > backend.hcl
+          printf '%s\n' "$TFVARS_CONTENT" > terraform.tfvars
+
+      - name: Initialize and validate Terraform
+        working-directory: infra/terraform
+        run: |
+          terraform init -backend-config=backend.hcl
+          terraform fmt -check -recursive
+          terraform validate
+
+      - name: Plan production deployment
+        working-directory: infra/terraform
+        env:
+          TF_VAR_image_uri: ${{ steps.image.outputs.image_uri }}
+        run: terraform plan -out=deployment.tfplan
+
+      - name: Apply production deployment
+        working-directory: infra/terraform
+        env:
+          TF_VAR_image_uri: ${{ steps.image.outputs.image_uri }}
+        run: terraform apply -auto-approve deployment.tfplan
+
+      - name: Verify ECS services and API readiness
+        working-directory: infra/terraform
+        shell: bash
+        run: |
+          cluster="$(terraform output -raw ecs_cluster_name)"
+          aws ecs wait services-stable \
+            --region "$AWS_REGION" \
+            --cluster "$cluster" \
+            --services prism-production-api prism-production-scheduler
+
+          service_counts="$(
+            aws ecs describe-services \
+              --region "$AWS_REGION" \
+              --cluster "$cluster" \
+              --services prism-production-api prism-production-scheduler \
+              --query 'services[].{name:serviceName,desired:desiredCount,running:runningCount}' \
+              --output table
+          )"
+          echo "$service_counts"
+
+          api_url="$(terraform output -raw api_url)"
+          curl --fail --show-error \
+            --retry 12 \
+            --retry-all-errors \
+            --retry-delay 10 \
+            "${api_url}/readyz"

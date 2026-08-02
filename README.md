@@ -34,6 +34,7 @@ The backend reads deployed contracts through Ethereum JSON-RPC. Production price
 - Deploy and verify contracts: [`protocol/README.md`](./protocol/README.md)
 - Run the backend locally: [`backend/README.md`](./backend/README.md)
 - Deploy the production AWS stack: [`infra/README.md`](./infra/README.md)
+- Automate backend CI and AWS deployment: [`docs/github-actions-deployment.md`](./docs/github-actions-deployment.md)
 
 Follow them in that order for a new environment. The AWS stack consumes addresses from the verified protocol deployment manifest and does not deploy contracts.
 
