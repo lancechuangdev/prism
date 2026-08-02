@@ -998,9 +998,12 @@ Secrets Manager ARNs for runtime secrets.
 
 The `TFVARS` secret contains the complete production `terraform.tfvars`. Its
 `image_uri` value is only a syntactically valid fallback. Every workflow run
-builds and pushes a new image, resolves its immutable ECR digest, and exports
-that value as `TF_VAR_image_uri`; Terraform gives that environment variable
-precedence over `terraform.tfvars`. No manual `image_uri` update is required.
+builds and pushes a new image, resolves its immutable ECR digest, and passes it
+to `terraform plan` with `-var="image_uri=..."`. Command-line variables take
+precedence over `terraform.tfvars`, and the selected value is embedded in the
+saved plan consumed by `terraform apply`. No manual `image_uri` update is
+required. Do not use `TF_VAR_image_uri` for this override: automatically loaded
+`terraform.tfvars` has higher precedence than environment variables.
 
 Environment secrets are unavailable to private repositories on GitHub Free.
 For such a repository, upgrade to a plan that supports them or add the same

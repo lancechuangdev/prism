@@ -120,13 +120,11 @@ jobs:
       - name: Plan production deployment
         working-directory: infra/terraform
         env:
-          TF_VAR_image_uri: ${{ steps.image.outputs.image_uri }}
-        run: terraform plan -out=deployment.tfplan
+          IMAGE_URI: ${{ steps.image.outputs.image_uri }}
+        run: terraform plan -var="image_uri=${IMAGE_URI}" -out=deployment.tfplan
 
       - name: Apply production deployment
         working-directory: infra/terraform
-        env:
-          TF_VAR_image_uri: ${{ steps.image.outputs.image_uri }}
         run: terraform apply -auto-approve deployment.tfplan
 
       - name: Verify ECS services and API readiness
