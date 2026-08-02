@@ -10,7 +10,7 @@
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:lancechuangdev/prism:environment:production"
+          "token.actions.githubusercontent.com:sub": "repo:lancechuangdev@113229606/prism@1304483380:environment:production"
         }
       }
     }

@@ -810,7 +810,7 @@ Create `github-actions-trust-policy.json` with the following contents:
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:GITHUB_OWNER/GITHUB_REPOSITORY:environment:production"
+          "token.actions.githubusercontent.com:sub": "repo:GITHUB_OWNER@GITHUB_OWNER_ID/GITHUB_REPOSITORY@GITHUB_REPOSITORY_ID:environment:production"
         }
       }
     }
@@ -818,10 +818,23 @@ Create `github-actions-trust-policy.json` with the following contents:
 }
 ```
 
-Replace all three placeholders. The `sub` value uses `environment:production`
-because the deployment job declares `environment: production`; a branch-based
-subject such as `ref:refs/heads/main` will not match this workflow. Validate the
-file and create the role:
+Replace all five placeholders. Repositories created after July 15, 2026 use
+GitHub's immutable subject format containing the numeric owner and repository
+IDs. Retrieve the values and immutable subject prefix with GitHub CLI:
+
+```bash
+gh api repos/"${GITHUB_OWNER}/${GITHUB_REPOSITORY}" \
+  --jq '{owner_id: .owner.id, repository_id: .id, created_at: .created_at}'
+
+gh api repos/"${GITHUB_OWNER}/${GITHUB_REPOSITORY}"/actions/oidc/customization/sub
+```
+
+For an older repository that has not opted into immutable subjects, GitHub may
+still issue the legacy `repo:GITHUB_OWNER/GITHUB_REPOSITORY` prefix. Use the
+`sub_claim_prefix` returned by the second command rather than guessing. Append
+`:environment:production` because the deployment job declares `environment:
+production`; a branch-based subject such as `ref:refs/heads/main` will not match
+this workflow. Validate the file and create the role:
 
 ```bash
 jq empty github-actions-trust-policy.json
