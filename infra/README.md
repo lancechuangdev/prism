@@ -872,7 +872,7 @@ aws iam update-assume-role-policy \
 ### 4. Grant the role deployment permissions
 
 The trust policy only answers *who may assume the role*; it grants no AWS
-resource access. Attach a reviewed customer-managed deployment policy:
+resource access. Add each required permission set explicitly.
 
 The repository includes a narrowly scoped policy for the workflow's ECR login,
 image push, and digest lookup. Attach it first:
@@ -892,7 +892,28 @@ in this policy are restricted to the production `prism/backend` repository in
 account `448079093324` and Region `us-west-2`. Update that ARN if the deployment
 account, Region, or ECR repository changes.
 
-The ECR policy is not sufficient for Terraform. Attach the separate, reviewed
+The S3 backend also needs narrowly scoped access to the production state object
+and its native S3 lock file. The state bucket uses S3-managed AES-256 encryption,
+so this deployment does not require KMS permissions:
+
+```bash
+jq empty infra/iam/github-actions-terraform-state-policy.json
+
+aws iam put-role-policy \
+  --profile "$AWS_PROFILE" \
+  --role-name prism-github-deploy \
+  --policy-name PrismTerraformState \
+  --policy-document file://infra/iam/github-actions-terraform-state-policy.json
+```
+
+This policy permits listing only the configured state paths, reading and
+updating `production/terraform.tfstate`, and reading, creating, and deleting
+`production/terraform.tfstate.tflock`. It intentionally does not permit deleting
+the state object or accessing historical object versions. Update its bucket and
+key ARNs if `backend.hcl` changes.
+
+State and ECR access still do not authorize Terraform to inspect or update the
+AWS resources represented by that state. Attach the separate, reviewed
 customer-managed infrastructure deployment policy:
 
 ```bash
