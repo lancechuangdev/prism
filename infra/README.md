@@ -874,6 +874,27 @@ aws iam update-assume-role-policy \
 The trust policy only answers *who may assume the role*; it grants no AWS
 resource access. Attach a reviewed customer-managed deployment policy:
 
+The repository includes a narrowly scoped policy for the workflow's ECR login,
+image push, and digest lookup. Attach it first:
+
+```bash
+jq empty infra/iam/github-actions-ecr-policy.json
+
+aws iam put-role-policy \
+  --profile "$AWS_PROFILE" \
+  --role-name prism-github-deploy \
+  --policy-name PrismBackendECR \
+  --policy-document file://infra/iam/github-actions-ecr-policy.json
+```
+
+`ecr:GetAuthorizationToken` requires `Resource: "*"`; all repository operations
+in this policy are restricted to the production `prism/backend` repository in
+account `448079093324` and Region `us-west-2`. Update that ARN if the deployment
+account, Region, or ECR repository changes.
+
+The ECR policy is not sufficient for Terraform. Attach the separate, reviewed
+customer-managed infrastructure deployment policy:
+
 ```bash
 export PRISM_DEPLOY_POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/replace-with-prism-deployment-policy"
 
