@@ -6,6 +6,7 @@ Prism is an EVM lending protocol with a Go backend and an AWS deployment stack.
 
 - [`protocol/`](./protocol) contains the Solidity contracts, Hardhat tests, local-chain deployment, Sepolia deployment, multisig administration, and contract-binding generation instructions.
 - [`backend/`](./backend) contains the Go API, scheduler, MySQL/Redis integration, local Docker Compose deployment, Chainlink price reader, and automatic liquidation keeper.
+- [`frontend/`](./frontend) contains the React application, typed API and contract clients, injected-wallet integration, shared UI foundation, and frontend roadmap.
 - [`infra/`](./infra) contains the production AWS architecture, Terraform configuration, runtime secrets, container deployment, migration gate, and operational verification.
 
 ## Architecture
@@ -44,6 +45,7 @@ Follow them in that order for a new environment. The AWS stack consumes addresse
 prism/
 ├── protocol/   Solidity contracts, tests, scripts, ABIs, and deployment manifests
 ├── backend/    Go API, scheduler, storage, cache, contract bindings, and Docker image
+├── frontend/   React application, wallet integration, and product interface
 ├── infra/      AWS deployment runbook and Terraform
 └── backend/docker-compose.yml Local MySQL, Redis, API, scheduler, and migration services
 ```

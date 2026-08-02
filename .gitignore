@@ -11,6 +11,7 @@ cache/
 !backend/internal/cache/*.go
 types/
 coverage/
+*.tsbuildinfo
 
 # Environment files
 .env
