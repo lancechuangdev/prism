@@ -995,6 +995,28 @@ Non-local processes emit JSON logs so CloudWatch Logs can filter stable fields i
 
 The Terraform stack converts API 5xx, scheduler success/failure, provider failure, and migration failure events into CloudWatch metrics. Alarms notify the SNS alerts topic for API errors, provider and migration failures, sustained API CPU, and scheduler lag. Scheduler lag means no successful sync was logged in two consecutive five-minute periods. Set `alarm_email` in `terraform.tfvars` and confirm the subscription email from AWS; SNS cannot deliver alerts until that confirmation is complete.
 
+### TODO: Wallet activity and historical indexer
+
+Move protocol-wide and wallet-specific historical reads into a production event indexer while retaining live contract reads for transaction-critical state:
+
+```mermaid
+flowchart LR
+  Chain[Blockchain] --> Indexer[Backend event indexer]
+  Indexer --> MySQL[(MySQL)]
+  MySQL --> API[Paginated history and portfolio APIs]
+  API --> Frontend
+  Chain -->|balances, allowances, pool state, pause state, simulation| Frontend
+```
+
+- [ ] Index PrismPool deposits, refunds, claims, withdrawals, pool creation, state changes, repayments, and liquidations into normalized event tables keyed by chain ID, contract address, transaction hash, and log index.
+- [ ] Add wallet portfolio and paginated activity APIs with stable ordering, token metadata, block timestamps, confirmation state, and filters for wallet, pool, event type, and block range.
+- [ ] Persist an independent checkpoint for each chain and contract deployment, scan RPC logs in bounded adaptive ranges, resume idempotently after restarts, and reconcile gaps before advancing a checkpoint.
+- [ ] Track block hashes and confirmation depth, detect reorganizations, roll back orphaned events and derived state, and replay from the last canonical checkpoint.
+- [ ] Treat chain ID, contract address, deployment block, and deployment identity as one namespace so a reset local chain cannot reuse stale MySQL pool or activity rows from an earlier deployment.
+- [ ] Reconcile indexed pool rows against live `poolCount`, archive or remove obsolete local-development rows after a chain reset, and document a safe reset command for persistent development volumes.
+- [ ] Keep frontend live reads for wallet balances, ERC-20 allowances, current pool state, contract pause state, action eligibility, and transaction simulation; indexed data must never be the sole authorization or preflight source for a financial transaction.
+- [ ] Add indexer lag, failed-range, reorganization, and checkpoint-stall metrics with readiness thresholds and operational alerts.
+
 ### TODO: Production blockers
 
 - [x] Pin versioned migrations to one MySQL connection so the advisory lock, schema changes, version records, and lock release use the same server session.

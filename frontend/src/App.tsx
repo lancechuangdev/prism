@@ -2,6 +2,7 @@ import { AppShell } from './components/AppShell'
 import { HomePage } from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
+import { PortfolioPage } from './pages/PortfolioPage'
 import { PoolDetailPage } from './pages/PoolDetailPage'
 import { PoolMarketplacePage } from './pages/PoolMarketplacePage'
 import { usePathname } from './routing'
@@ -15,14 +16,7 @@ function CurrentPage() {
     case '/pools':
       return <PoolMarketplacePage />
     case '/portfolio':
-      return (
-        <PlaceholderPage
-          eyebrow="Your positions"
-          title="A single view of your capital"
-          description="Connect a wallet to prepare for wallet-specific balances, refunds, and claims."
-          requiresWallet
-        />
-      )
+      return <PortfolioPage />
     case '/governance':
       return (
         <PlaceholderPage

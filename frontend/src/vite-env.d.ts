@@ -11,6 +11,7 @@ interface ImportMetaEnv {
   readonly VITE_PRISM_NATIVE_CURRENCY_DECIMALS?: string
   readonly VITE_PRISM_POOL_ADDRESS: string
   readonly VITE_PRISM_MULTISIG_ADDRESS: string
+  readonly VITE_PRISM_DEPLOYMENT_BLOCK?: string
 }
 
 interface ImportMeta {

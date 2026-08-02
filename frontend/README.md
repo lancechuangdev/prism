@@ -35,6 +35,8 @@ cd ../protocol
 PRISM_WALLET_ADDRESS=0x... npm run fund:local
 ```
 
+The portfolio reads wallet positions and protocol events directly from the chain. Set `VITE_PRISM_DEPLOYMENT_BLOCK` to the PrismPool deployment block in hosted environments so activity queries do not scan from genesis; local development defaults to block `0`. Claim and refund buttons are shown only when the live pool state and wallet records make the action eligible, and each transaction is simulated before broadcast.
+
 ## Product areas
 
 ### Pool marketplace
@@ -190,12 +192,12 @@ Affected actions should be hidden or disabled with a clear explanation. These li
 
 ### Phase 3: Portfolio and lifecycle actions
 
-- Discover wallet-specific lender and borrower positions from contracts.
-- Build the portfolio summary and per-position views.
-- Implement excess-lend and excess-collateral refunds.
-- Implement lender-position and borrower-position/loan claims.
-- Show action eligibility based on pool state and the user's on-chain records.
-- Add transaction history and actionable maturity or risk notifications.
+- [x] Discover wallet-specific lender and borrower positions from contracts.
+- [x] Build the portfolio summary and per-position views.
+- [x] Implement excess-lend and excess-collateral refunds.
+- [x] Implement lender-position and borrower-position/loan claims.
+- [x] Show action eligibility based on live pool state and the user's on-chain records.
+- [x] Add contract-event history and actionable maturity, claim, refund, and collateral-risk notifications.
 
 **Exit criteria:** users can find their positions and complete every currently supported post-settlement user action from one dashboard.
 
@@ -227,7 +229,7 @@ Affected actions should be hidden or disabled with a clear explanation. These li
 
 These items depend on protocol or backend work and should not be enabled until the underlying capability is implemented and audited:
 
-- lender and borrower position-token redemption;
+- safe lender and borrower position-token redemption after the protocol accounting redesign;
 - refunds for cancelled pools;
 - indexed wallet positions and historical performance;
 - richer event and transaction history APIs;

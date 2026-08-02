@@ -29,6 +29,7 @@ const environmentSchema = z.object({
     .default(18),
   VITE_PRISM_POOL_ADDRESS: address,
   VITE_PRISM_MULTISIG_ADDRESS: address,
+  VITE_PRISM_DEPLOYMENT_BLOCK: z.string().regex(/^\d+$/).default('0'),
 })
 
 export type AppConfig = {
@@ -43,6 +44,7 @@ export type AppConfig = {
   contracts: {
     pool: `0x${string}`
     multisig: `0x${string}`
+    deploymentBlock: bigint
   }
 }
 
@@ -82,6 +84,7 @@ export function parseConfig(environment: Record<string, unknown>): AppConfig {
     contracts: {
       pool: values.VITE_PRISM_POOL_ADDRESS,
       multisig: values.VITE_PRISM_MULTISIG_ADDRESS,
+      deploymentBlock: BigInt(values.VITE_PRISM_DEPLOYMENT_BLOCK),
     },
   }
 }
