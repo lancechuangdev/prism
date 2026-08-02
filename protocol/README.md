@@ -76,6 +76,26 @@ The command prints a JSON object containing the values needed by an RPC client a
 
 Contract addresses belong to the running local node. Restarting `npm run node` resets its chain state, so run `npm run deploy:local` again and use the newly generated addresses. The local deployment file is ignored by Git because its addresses are only valid for that running node.
 
+### Fund local wallets
+
+Mint local pUSD and pETH and send development ETH to one wallet after `deploy:local`:
+
+```bash
+PRISM_WALLET_ADDRESS=0x... npm run fund:local
+```
+
+Fund multiple wallets by providing a comma-separated list and optionally override the human-readable amounts:
+
+```bash
+PRISM_WALLET_ADDRESSES=0x...,0x... \
+PRISM_LOCAL_PUSD_AMOUNT=10000 \
+PRISM_LOCAL_PETH_AMOUNT=100 \
+PRISM_LOCAL_ETH_AMOUNT=10 \
+npm run fund:local
+```
+
+The command is restricted to local chain ID `31337`. It temporarily authorizes each development token owner as a minter, restores the previous minter state after minting, and prints the resulting balances. Set any amount to `0` to skip that asset. These tokens and balances disappear when the local Hardhat node restarts.
+
 ## Sepolia production-integration deployment
 
 `ChainlinkOracle` reads token/USD Chainlink Data Feeds, rejects incomplete,
