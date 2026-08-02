@@ -58,7 +58,11 @@ export function usePools() {
   useEffect(() => {
     const controller = new AbortController()
     void load(controller.signal)
-    return () => controller.abort()
+    const timer = window.setInterval(() => void load(controller.signal), 30_000)
+    return () => {
+      controller.abort()
+      window.clearInterval(timer)
+    }
   }, [load])
 
   return { ...state, refresh: () => load() }

@@ -26,6 +26,15 @@ Runtime configuration is validated before the application starts. The app suppor
 
 During local development, `VITE_PRISM_API_URL=/prism-api` uses Vite's proxy to reach the backend at `http://localhost:8080` without requiring backend CORS headers. Use an absolute API URL for deployments where the frontend and API are hosted on different origins and the API explicitly allows the frontend origin.
 
+Lending and collateral deposits require the connected wallet to hold the pool's local ERC-20 tokens and native ETH for gas. The frontend reads balances, allowances, protocol minimums, pause state, and pool state directly from the configured RPC; it requests an exact-amount approval, simulates the selected deposit, and waits for its receipt before reporting success. Indexed marketplace values refresh every 30 seconds to follow the backend scheduler.
+
+Fund a connected local wallet before testing deposits:
+
+```bash
+cd ../protocol
+PRISM_WALLET_ADDRESS=0x... npm run fund:local
+```
+
 ## Product areas
 
 ### Pool marketplace
@@ -135,10 +144,11 @@ Production operator authentication uses Cognito access tokens with the `prism/pr
 
 ## Known protocol limitations
 
-The frontend must not imply support for functionality that the protocol does not yet implement:
+The frontend must disclose protocol functionality that is incomplete or unsafe for production:
 
-- position-token redemption is not currently implemented;
-- refunds from `CANCELLED` pools are not currently implemented; and
+- position-token redemption exists but is unsafe when one position-token contract is reused across pools, so production pools require pool-specific position tokens or accounting;
+- refunds from `CANCELLED` pools are not currently implemented;
+- repayment-interest units require correction and testing before real-asset use; and
 - preparing a multisig proposal does not guarantee that its eventual on-chain execution will succeed.
 
 Affected actions should be hidden or disabled with a clear explanation. These limitations should also appear in pool risk disclosures before a user deposits.
@@ -169,12 +179,12 @@ Affected actions should be hidden or disabled with a clear explanation. These li
 
 ### Phase 2: Lending and borrowing
 
-- Add lender and borrower calculators with minimum, balance, allowance, supply, and deadline validation.
-- Implement exact-amount ERC-20 approval flows.
-- Implement `depositLend` and `depositBorrow` transactions.
-- Add transaction simulation or preflight checks where available.
-- Track wallet prompts, submitted transactions, replacements, confirmations, failures, and explorer links.
-- Refresh balances and pool data after confirmation.
+- [x] Add lender and borrower calculators with minimum, balance, allowance, supply, and deadline validation.
+- [x] Implement exact-amount ERC-20 approval flows.
+- [x] Implement `depositLend` and `depositBorrow` transactions.
+- [x] Simulate approvals and deposits against live contract state before broadcast.
+- [x] Track wallet prompts, submitted transactions, replacements, confirmations, failures, and explorer links.
+- [x] Refresh balances and request indexed pool data after confirmation.
 
 **Exit criteria:** a connected user can safely fund either side of an eligible pool and see the confirmed result.
 

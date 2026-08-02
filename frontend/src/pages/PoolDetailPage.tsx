@@ -1,6 +1,7 @@
 import { Button } from '../components/Button'
 import { Countdown } from '../components/Countdown'
 import { DataStatus } from '../components/DataStatus'
+import { DepositPanel } from '../components/DepositPanel'
 import { PoolStateBadge } from '../components/PoolStateBadge'
 import { TokenPair } from '../components/TokenPair'
 import { config } from '../config/env'
@@ -111,6 +112,9 @@ export function PoolDetailPage({ poolIndex }: { poolIndex: number }) {
           <strong>{formatRate(base.interestRate)}</strong>
         </div>
       </header>
+      {base.state === '0' && (
+        <DepositPanel pool={pool} onConfirmed={() => void refresh()} />
+      )}
       <div className="detail-grid">
         <div className="detail-main">
           <section className="detail-section">
@@ -248,8 +252,16 @@ export function PoolDetailPage({ poolIndex }: { poolIndex: number }) {
             <p className="eyebrow">Before participating</p>
             <h2>Protocol limitations</h2>
             <ul>
-              <li>Position-token redemption is not implemented yet.</li>
+              <li>
+                Position-token redemption is unsafe if a position-token contract
+                is reused across pools; production pools require pool-specific
+                position accounting.
+              </li>
               <li>Cancelled pools do not currently support refunds.</li>
+              <li>
+                Repayment-interest units remain under protocol review; these
+                development pools must not be treated as production-ready.
+              </li>
               <li>
                 Prices and pool values shown here are indexed snapshots, not
                 transaction simulations.

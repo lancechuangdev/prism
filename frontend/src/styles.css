@@ -618,6 +618,176 @@ a:focus-visible {
     monospace;
   letter-spacing: -0.08em;
 }
+.deposit-panel {
+  margin: 1rem 0;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  border: 1px solid var(--line);
+  background: #0c1c16;
+}
+.deposit-tabs {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+}
+.deposit-tabs button {
+  min-height: 4rem;
+  padding: 1rem 1.25rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+  font:
+    500 0.8rem 'DM Mono',
+    monospace;
+}
+.deposit-tabs button:hover {
+  color: var(--ink);
+}
+.deposit-tabs button.active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.deposit-panel__body {
+  max-width: 720px;
+  padding: clamp(1.5rem, 4vw, 3rem);
+}
+.deposit-panel__body h2 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+  letter-spacing: -0.04em;
+}
+.deposit-description {
+  margin: 0 0 2rem;
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 0.85rem;
+}
+.amount-field {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  background: #08130f;
+}
+.amount-field > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+.amount-field button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font:
+    0.68rem 'DM Mono',
+    monospace;
+  text-transform: uppercase;
+}
+.amount-field > div:nth-child(2) {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  margin: 0.65rem 0;
+}
+.amount-field input {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font:
+    500 clamp(1.8rem, 5vw, 3rem) 'DM Mono',
+    monospace;
+}
+.amount-field input::placeholder {
+  color: #456054;
+}
+.amount-field > div:nth-child(2) span {
+  color: var(--ink);
+  font:
+    0.8rem 'DM Mono',
+    monospace;
+}
+.amount-field small {
+  color: var(--muted);
+  font:
+    0.65rem 'DM Mono',
+    monospace;
+}
+.deposit-preview {
+  margin: 1rem 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--line);
+}
+.deposit-preview div {
+  padding: 1rem;
+  background: #10251e;
+}
+.deposit-preview dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+.deposit-preview dd {
+  margin: 0.5rem 0 0;
+  font:
+    0.75rem 'DM Mono',
+    monospace;
+}
+.form-error {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  border-left: 2px solid #ff9f79;
+  background: #21140f;
+  color: #ffc2a9;
+  font-size: 0.78rem;
+}
+.transaction-message {
+  margin: 1rem 0;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  font-size: 0.78rem;
+}
+.transaction-message--success {
+  border-color: #4f7138;
+  background: #12200d;
+}
+.transaction-message--error {
+  border-color: #714c3b;
+  background: #21140f;
+}
+.transaction-message p {
+  margin: 0;
+}
+.transaction-message a {
+  display: inline-block;
+  margin-top: 0.6rem;
+  color: var(--accent);
+  text-underline-offset: 0.25em;
+}
+.transaction-progress {
+  color: var(--accent);
+  font:
+    0.7rem 'DM Mono',
+    monospace;
+}
+.deposit-submit {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+.deposit-safety {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-align: center;
+}
 .detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(280px, 0.8fr);
@@ -857,6 +1027,27 @@ footer {
   }
   .detail-rate {
     text-align: left;
+  }
+  .deposit-panel {
+    grid-template-columns: 1fr;
+  }
+  .deposit-tabs {
+    flex-direction: row;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .deposit-tabs button {
+    flex: 1;
+    border-bottom: 0;
+  }
+  .deposit-tabs button + button {
+    border-left: 1px solid var(--line);
+  }
+  .deposit-tabs button.active {
+    box-shadow: inset 0 3px var(--accent);
+  }
+  .deposit-panel__body {
+    padding: 1.5rem 1rem;
   }
   .detail-grid {
     grid-template-columns: 1fr;
