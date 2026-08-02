@@ -2,6 +2,8 @@ import { AppShell } from './components/AppShell'
 import { HomePage } from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
+import { PoolDetailPage } from './pages/PoolDetailPage'
+import { PoolMarketplacePage } from './pages/PoolMarketplacePage'
 import { usePathname } from './routing'
 
 function CurrentPage() {
@@ -11,13 +13,7 @@ function CurrentPage() {
     case '/':
       return <HomePage />
     case '/pools':
-      return (
-        <PlaceholderPage
-          eyebrow="Marketplace"
-          title="Pool discovery is next"
-          description="The Phase 1 marketplace will make every indexed Prism pool readable and comparable."
-        />
-      )
+      return <PoolMarketplacePage />
     case '/portfolio':
       return (
         <PlaceholderPage
@@ -36,8 +32,14 @@ function CurrentPage() {
           requiresWallet
         />
       )
-    default:
-      return <NotFoundPage />
+    default: {
+      const poolMatch = pathname.match(/^\/pools\/(\d+)$/)
+      return poolMatch ? (
+        <PoolDetailPage poolIndex={Number(poolMatch[1])} />
+      ) : (
+        <NotFoundPage />
+      )
+    }
   }
 }
 

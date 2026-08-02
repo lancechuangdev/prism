@@ -1,7 +1,7 @@
 export type PoolState = '0' | '1' | '2' | '3' | '4'
 
-export type TokenKey = { chainID: string; address: string }
-export type PoolKey = { chainID: string; poolID: number }
+export type TokenKey = { ChainID: string; Address: string }
+export type PoolKey = { ChainID: string; PoolID: number }
 
 export type TokenSnapshot = {
   address: string
@@ -52,4 +52,10 @@ export type PoolData = {
 export type IndexedPool<T> = { index: number; pool_data: T }
 export type ListResponse<T> = { data: T[] }
 export type DataResponse<T> = { data: T }
-export type PriceQuote = { symbol: string; price: string; timestamp?: string }
+export type PriceQuote = {
+  symbol: string
+  currency: string
+  price: string
+  source: string
+  updatedAt: string
+}

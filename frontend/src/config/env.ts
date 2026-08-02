@@ -6,9 +6,15 @@ const address = z
   .refine(isAddress, 'must be a valid EVM address')
   .transform((value) => getAddress(value))
 const url = z.string().url()
+const apiUrl = z
+  .string()
+  .refine(
+    (value) => value.startsWith('/') || URL.canParse(value),
+    'must be an absolute URL or a root-relative path',
+  )
 
 const environmentSchema = z.object({
-  VITE_PRISM_API_URL: url,
+  VITE_PRISM_API_URL: apiUrl,
   VITE_PRISM_CHAIN_ID: z.coerce.number().int().positive(),
   VITE_PRISM_CHAIN_NAME: z.string().min(1),
   VITE_PRISM_RPC_URL: url,

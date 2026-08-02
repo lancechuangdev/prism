@@ -24,6 +24,8 @@ npm run build
 
 Runtime configuration is validated before the application starts. The app supports injected EIP-1193 wallets and remains available in read-only mode when a wallet is absent or disconnected.
 
+During local development, `VITE_PRISM_API_URL=/prism-api` uses Vite's proxy to reach the backend at `http://localhost:8080` without requiring backend CORS headers. Use an absolute API URL for deployments where the frontend and API are hosted on different origins and the API explicitly allows the frontend origin.
+
 ## Product areas
 
 ### Pool marketplace
@@ -156,12 +158,12 @@ Affected actions should be hidden or disabled with a clear explanation. These li
 
 ### Phase 1: Read-only marketplace
 
-- Build pool listing, filtering, sorting, loading, empty, and error states.
-- Build pool detail pages and combine pool base and settlement data.
-- Display token metadata, prices, price freshness, and funding progress.
-- Translate numeric pool states into user-facing lifecycle labels.
-- Add settlement and maturity countdowns, contract links, and risk disclosures.
-- Distinguish indexed values from live contract values where both are shown.
+- [x] Build pool listing, filtering, sorting, loading, empty, and error states.
+- [x] Build pool detail pages and combine pool base and settlement data.
+- [x] Display token metadata, available indexed prices, data freshness, and funding progress.
+- [x] Translate numeric pool states into user-facing lifecycle labels.
+- [x] Add settlement and maturity countdowns, contract links, and risk disclosures.
+- [x] Label indexed API values explicitly; live contract values are deferred until both sources are presented together.
 
 **Exit criteria:** a user can understand and compare every indexed pool without connecting a wallet.
 
