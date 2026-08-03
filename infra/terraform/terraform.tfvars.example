@@ -3,6 +3,7 @@ environment         = "production"
 image_uri           = "123456789012.dkr.ecr.us-west-2.amazonaws.com/prism@sha256:..."
 domain_name         = "api.prism.example"
 route53_zone_id     = "Z0123456789EXAMPLE"
+cors_allowed_origins = ["https://prism.example"]
 chain_id            = "11155111"
 chain_rpc_url_secret_arn = "arn:aws:secretsmanager:us-west-2:123456789012:secret:prism/production/chain-rpc-..."
 liquidation_enabled                = false

@@ -465,13 +465,42 @@ func New(cfg config.Config,
 
 	return &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           withCorrelationID(requestLogger(logger, withRequestDeadline(mux))),
+		Handler:           withCORS(cfg.CORSAllowedOrigins, withCorrelationID(requestLogger(logger, withRequestDeadline(mux)))),
 		ReadHeaderTimeout: httpReadHeaderTimeout,
 		ReadTimeout:       httpReadTimeout,
 		WriteTimeout:      httpWriteTimeout,
 		IdleTimeout:       httpIdleTimeout,
 		MaxHeaderBytes:    httpMaxHeaderBytes,
 	}
+}
+
+func withCORS(allowedOrigins string, next http.Handler) http.Handler {
+	allowed := make(map[string]struct{})
+	for origin := range strings.SplitSeq(allowedOrigins, ",") {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			allowed[strings.TrimSuffix(origin, "/")] = struct{}{}
+		}
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := strings.TrimSuffix(r.Header.Get("Origin"), "/")
+		if _, ok := allowed[origin]; !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		w.Header().Add("Vary", "Origin")
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type")
+			w.Header().Set("Access-Control-Max-Age", "600")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func withRequestDeadline(next http.Handler) http.Handler {

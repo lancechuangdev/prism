@@ -40,6 +40,16 @@ variable "route53_zone_id" {
   type        = string
 }
 
+variable "cors_allowed_origins" {
+  description = "Browser origins allowed to call the API, without trailing slashes."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.cors_allowed_origins) > 0 && alltrue([for origin in var.cors_allowed_origins : can(regex("^https://[^/]+$", origin))])
+    error_message = "cors_allowed_origins must contain at least one HTTPS origin without a path or trailing slash."
+  }
+}
+
 variable "chain_id" {
   description = "Expected EVM chain ID."
   type        = string

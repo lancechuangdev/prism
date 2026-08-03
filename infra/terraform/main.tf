@@ -28,7 +28,8 @@ locals {
     { name = "PRISM_AUTH_MODE", value = "cognito" },
     { name = "PRISM_COGNITO_REGION", value = var.cognito_region },
     { name = "PRISM_COGNITO_USER_POOL_ID", value = var.cognito_user_pool_id },
-    { name = "PRISM_COGNITO_CLIENT_ID", value = var.cognito_client_id }
+    { name = "PRISM_COGNITO_CLIENT_ID", value = var.cognito_client_id },
+    { name = "PRISM_CORS_ALLOWED_ORIGINS", value = join(",", var.cors_allowed_origins) }
   ]
 
   common_secrets = [

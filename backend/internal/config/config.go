@@ -56,6 +56,7 @@ type Config struct {
 	CognitoRegion          string
 	CognitoUserPoolID      string
 	CognitoClientID        string
+	CORSAllowedOrigins     string
 	ProposalWriteScope     string
 	AdminReadScope         string
 	PriceSymbol            string
@@ -93,6 +94,7 @@ func Load() Config {
 		CognitoRegion:          readEnv("PRISM_COGNITO_REGION", ""),
 		CognitoUserPoolID:      readEnv("PRISM_COGNITO_USER_POOL_ID", ""),
 		CognitoClientID:        readEnv("PRISM_COGNITO_CLIENT_ID", ""),
+		CORSAllowedOrigins:     readEnv("PRISM_CORS_ALLOWED_ORIGINS", ""),
 		ProposalWriteScope:     readEnv("PRISM_COGNITO_PROPOSAL_SCOPE", defaultProposalScope),
 		AdminReadScope:         readEnv("PRISM_COGNITO_ADMIN_SCOPE", defaultAdminScope),
 		PriceSymbol:            readEnv("PRISM_PRICE_SYMBOL", defaultPriceSymbol),
@@ -196,6 +198,9 @@ func (c Config) Validate(component string) error {
 	if component == ComponentAPI {
 		if strings.TrimSpace(c.MultisigAddress) == "" {
 			problems = append(problems, fmt.Errorf("PRISM_MULTISIG_ADDRESS is required in production"))
+		}
+		if strings.TrimSpace(c.CORSAllowedOrigins) == "" {
+			problems = append(problems, fmt.Errorf("PRISM_CORS_ALLOWED_ORIGINS is required in production"))
 		}
 		if c.AuthMode == "cognito" {
 			if strings.TrimSpace(c.CognitoRegion) == "" {

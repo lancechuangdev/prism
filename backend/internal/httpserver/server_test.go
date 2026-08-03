@@ -110,6 +110,56 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
+func TestCORSAllowsConfiguredOrigin(t *testing.T) {
+	server := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/multisig", nil)
+	req.Header.Set("Origin", "https://app.example")
+	rec := httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://app.example" {
+		t.Fatalf("expected configured CORS origin, got %q", got)
+	}
+}
+
+func TestCORSHandlesAuthenticatedPreflight(t *testing.T) {
+	server := newTestServer(t)
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/multisig/proposals", nil)
+	req.Header.Set("Origin", "https://app.example")
+	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	req.Header.Set("Access-Control-Request-Headers", "authorization,content-type")
+	rec := httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, OPTIONS" {
+		t.Fatalf("unexpected allowed methods %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Accept, Authorization, Content-Type" {
+		t.Fatalf("unexpected allowed headers %q", got)
+	}
+}
+
+func TestCORSRejectsUnconfiguredOrigin(t *testing.T) {
+	server := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Header.Set("Origin", "https://attacker.example")
+	rec := httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("expected no CORS permission, got %q", got)
+	}
+}
+
 func TestErrorResponseIncludesRequestID(t *testing.T) {
 	server := newTestServer(t)
 
@@ -770,7 +820,7 @@ func newTestServerWithReadinessAndDependencies(t *testing.T, checker readiness.C
 		TokenTTL:      time.Hour,
 	}, auth.NewMemorySessionStore())
 	return New(
-		config.Config{Env: "test", Port: "0", APIVersion: "1"},
+		config.Config{Env: "test", Port: "0", APIVersion: "1", CORSAllowedOrigins: "https://app.example"},
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		chain.NewQueryService(repo),
 		poolCreator,

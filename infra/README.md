@@ -100,6 +100,42 @@ Route 53 maps the API hostname to the Application Load Balancer. AWS Certificate
 
 TLS terminates at the load balancer. It decrypts the request and forwards HTTP to port 8080 on a private API task. The Go service therefore does not store the public certificate or implement certificate renewal.
 
+### Frontend and API origin design
+
+Prism currently exposes the static frontend and API on separate browser origins:
+
+```text
+https://prismapp.link      → CloudFront → private S3 bucket
+https://api.prismapp.link  → Application Load Balancer → ECS API
+```
+
+An origin is the exact combination of scheme, hostname, and port. The two HTTPS hostnames above share a parent domain but are not the same origin, so browsers require the API to return CORS permission for `https://prismapp.link`. Terraform passes that exact allowlist to the API as `PRISM_CORS_ALLOWED_ORIGINS`; the backend handles `GET`, `POST`, and `OPTIONS` and permits the `Accept`, `Authorization`, and `Content-Type` request headers. CORS controls whether browser JavaScript may read a response; it is not authentication and does not prevent direct HTTP, mobile, or server-to-server requests.
+
+An alternative is to expose both through one origin and make CloudFront the HTTP router:
+
+```text
+https://prismapp.link/*       → CloudFront → private S3 bucket
+https://prismapp.link/api/*   → CloudFront → API origin
+https://prismapp.link/readyz  → CloudFront → API origin
+```
+
+Route 53 cannot implement this path split because DNS resolves hostnames and does not receive URL paths. CloudFront, an ALB, API Gateway, or another reverse proxy must perform path-based routing.
+
+| Consideration     | Separate API origin (`api.prismapp.link`)                              | Same origin (`prismapp.link/api/*`)                                                             |
+| ----------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Browser security  | Requires an exact CORS allowlist and authenticated-request preflights  | Frontend API calls are same-origin and need no CORS permission                                  |
+| Service boundary  | API DNS, TLS, WAF, scaling, monitoring, and clients remain independent | Frontend and API share the CloudFront routing and failure boundary                              |
+| Client diversity  | Natural public endpoint for web, mobile, partner, and server clients   | Best suited to a web-specific backend-for-frontend                                              |
+| CDN configuration | Static-content distribution stays simple                               | Requires higher-priority API behaviors and correct header, query, cookie, and method forwarding |
+| Caching risk      | API bypasses the frontend cache by default                             | API behaviors must disable caching so authenticated responses are never shared                  |
+| SPA fallback      | Cannot affect API responses                                            | Must be isolated from `/api/*` or an API error could become `index.html` with status 200        |
+| Authentication    | Cross-origin bearer tokens work after CORS preflight                   | Same-origin cookies and browser authentication can be simpler                                   |
+| Availability      | A frontend distribution error need not break direct API access         | A CloudFront routing error can break both the frontend and API                                  |
+
+For a general API used by multiple client types, the separate API hostname creates a clearer independent service boundary. For a web-only backend-for-frontend, same-origin path routing can remove CORS complexity. Prism retains the separate origin because the API is independently addressable and the required CORS policy can be narrow and explicit.
+
+If the design moves to same-origin routing, the `/api/*` behavior must use HTTPS to the API origin, allow the required HTTP methods, disable caching, forward `Authorization`, `Content-Type`, query strings, and other required request data, and remain outside the SPA error fallback. Static hashed assets should retain long-lived immutable caching while `index.html` remains non-cached.
+
 ### Cognito authentication
 
 Cognito authenticates users and issues JWT access tokens; Prism does not handle user passwords in production. Clients send the access token as `Authorization: Bearer <token>`. The API downloads the User Pool's rotating public keys and validates the RS256 signature, issuer, app-client ID, `token_use=access`, expiry, and subject. It then requires `prism/proposals.write` for proposal creation and `prism/admin.read` for the admin session endpoint. ID and refresh tokens are not accepted as API credentials.
@@ -535,6 +571,7 @@ environment     = "production"
 image_uri       = "ACCOUNT.dkr.ecr.us-west-2.amazonaws.com/prism/backend@sha256:..."
 domain_name     = "api.example.com"
 route53_zone_id = "Z..."
+cors_allowed_origins = ["https://prism.example.com"]
 
 chain_id         = "11155111"
 pool_address     = "0x..."

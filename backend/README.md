@@ -128,6 +128,7 @@ PRISM_COGNITO_USER_POOL_ID=us-west-2_example
 PRISM_COGNITO_CLIENT_ID=<app-client-id>
 PRISM_COGNITO_PROPOSAL_SCOPE=prism/proposals.write
 PRISM_COGNITO_ADMIN_SCOPE=prism/admin.read
+PRISM_CORS_ALLOWED_ORIGINS=https://prism.example
 ```
 
 In Cognito mode, the login and logout routes are not registered. The backend
@@ -138,6 +139,8 @@ layer, require `prism/proposals.write` on the proposal route, and require
 `prism/admin.read` on admin routes. The backend
 repeats token and scope validation so a network-path mistake cannot bypass the
 authorization policy.
+
+`PRISM_CORS_ALLOWED_ORIGINS` is a comma-separated list of exact browser origins that may call the API. Do not use `*` for the production operator API. The CORS middleware permits `GET`, `POST`, and `OPTIONS` with the `Accept`, `Authorization`, and `Content-Type` request headers.
 
 The `/api/v1` prefix uses `PRISM_API_VERSION=1`.
 
