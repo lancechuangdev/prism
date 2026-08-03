@@ -9,6 +9,7 @@
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "security:check": "npm audit --omit=dev --audit-level=high",
     "test": "vitest run",
     "test:watch": "vitest"
   },

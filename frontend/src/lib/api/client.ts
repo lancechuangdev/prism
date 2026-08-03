@@ -103,10 +103,20 @@ export class PrismApi {
   }
 
   getReadiness(signal?: AbortSignal) {
-    return this.get<{ status: string; dependencies: Record<string, string> }>(
-      '/readyz',
+    return fetch(`${this.baseUrl}/readyz`, {
+      headers: { Accept: 'application/json' },
       signal,
-    )
+    }).then(async (response) => {
+      if (response.status !== 200 && response.status !== 503)
+        throw new ApiError(
+          `Prism readiness request failed with status ${response.status}`,
+          response.status,
+        )
+      return response.json() as Promise<{
+        status: string
+        dependencies: Record<string, string>
+      }>
+    })
   }
 
   login(name: string, password: string) {

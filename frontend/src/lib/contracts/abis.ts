@@ -8,6 +8,7 @@ export const prismPoolAbi = parseAbi([
   'function claimLenderPosition(uint256 poolId)',
   'function claimBorrowerPositionAndLoan(uint256 poolId)',
   'function globalPaused() view returns (bool)',
+  'function liquidator() view returns (address)',
   'function minLendAmount() view returns (uint256)',
   'function minBorrowAmount() view returns (uint256)',
   'function getPoolState(uint256 poolId) view returns (uint8)',

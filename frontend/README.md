@@ -24,6 +24,8 @@ npm run build
 
 Runtime configuration is validated before the application starts. The app supports injected EIP-1193 wallets and remains available in read-only mode when a wallet is absent or disconnected.
 
+The application polls backend readiness and live chain state every 30 seconds and when a backgrounded tab becomes visible. The global status panel separates API dependencies, RPC chain identity, contract reachability, pause state, and the configured liquidator address. A configured liquidator is not reported as a healthy keeper because the backend does not expose scheduler heartbeat or last-action status.
+
 During local development, `VITE_PRISM_API_URL=/prism-api` uses Vite's proxy to reach the backend at `http://localhost:8080` without requiring backend CORS headers. Use an absolute API URL for deployments where the frontend and API are hosted on different origins and the API explicitly allows the frontend origin.
 
 Lending and collateral deposits require the connected wallet to hold the pool's local ERC-20 tokens and native ETH for gas. The frontend reads balances, allowances, protocol minimums, pause state, and pool state directly from the configured RPC; it requests an exact-amount approval, simulates the selected deposit, and waits for its receipt before reporting success. Indexed marketplace values refresh every 30 seconds to follow the backend scheduler.
@@ -146,6 +148,8 @@ Production operator authentication uses Cognito access tokens with the `prism/pr
 
 The governance console reads multisig owners, thresholds, and proposal status without authentication. Preparing proposals requires operator authentication through `VITE_PRISM_AUTH_MODE=local` or Cognito Hosted UI with PKCE. Cognito deployments must set `VITE_PRISM_COGNITO_DOMAIN`, `VITE_PRISM_COGNITO_CLIENT_ID`, `VITE_PRISM_COGNITO_REDIRECT_URI`, and `VITE_PRISM_COGNITO_LOGOUT_URI`. Access tokens are kept in session storage, and the backend remains responsible for validating every token and scope. A connected owner wallet is separately required to simulate, approve, or execute an unsigned multisig transaction.
 
+Privacy-preserving product telemetry is disabled by default. Set `VITE_PRISM_TELEMETRY_ENDPOINT` only after the receiving system and privacy notice are approved. Events use an explicit allowlist, contain no wallet addresses, amounts, calldata, hashes, query strings, credentials, or tokens, and are suppressed when the browser sends Do Not Track. See [`RELEASE_RUNBOOK.md`](RELEASE_RUNBOOK.md) for deployment, target-network testing, rollback, incident, and support procedures.
+
 ## Known protocol limitations
 
 The frontend must disclose protocol functionality that is incomplete or unsafe for production:
@@ -217,13 +221,13 @@ Affected actions should be hidden or disabled with a clear explanation. These li
 
 ### Phase 5: Safety, observability, and release readiness
 
-- Add API and dependency health indicators and stale-data handling.
-- Surface contract pause state and keeper status when those reads are available.
-- Add analytics and privacy-reviewed product telemetry.
-- Complete keyboard navigation, screen-reader, contrast, and responsive audits.
-- Add unit, integration, contract-fork, and end-to-end tests for critical flows.
-- Add CSP and dependency checks, redact sensitive logs, and review authentication and transaction boundaries.
-- Publish deployment, rollback, incident, and support runbooks.
+- [x] Add API and dependency health indicators and stale-data handling.
+- [x] Surface contract pause state and the configured liquidator while disclosing that keeper heartbeat is unavailable.
+- [x] Add allowlisted, identifier-free, Do-Not-Track-aware product telemetry that is disabled by default.
+- [x] Complete keyboard navigation, screen-reader status, focus, reduced-motion, and responsive navigation improvements.
+- [ ] Add target-network contract-fork and end-to-end tests for every critical financial and governance flow; unit and component coverage is active in CI.
+- [x] Add baseline CSP and production dependency checks, redact sensitive telemetry, and document authentication and transaction boundaries.
+- [x] Publish deployment, rollback, incident, and support runbooks.
 
 **Exit criteria:** critical user and governance journeys are tested against the target deployment and the frontend is safe to release to its intended network.
 

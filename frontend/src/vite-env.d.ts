@@ -17,6 +17,7 @@ interface ImportMetaEnv {
   readonly VITE_PRISM_COGNITO_CLIENT_ID?: string
   readonly VITE_PRISM_COGNITO_REDIRECT_URI?: string
   readonly VITE_PRISM_COGNITO_LOGOUT_URI?: string
+  readonly VITE_PRISM_TELEMETRY_ENDPOINT?: string
 }
 
 interface ImportMeta {

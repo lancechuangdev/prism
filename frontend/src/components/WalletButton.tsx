@@ -1,4 +1,6 @@
+import { config } from '../config/env'
 import { formatAddress } from '../lib/format'
+import { track } from '../lib/telemetry'
 import { useWallet } from '../wallet/WalletProvider'
 import { Button } from './Button'
 
@@ -30,7 +32,10 @@ export function WalletButton() {
     <Button
       type="button"
       disabled={wallet.status === 'connecting'}
-      onClick={() => void wallet.connect()}
+      onClick={() => {
+        track('wallet_connect_requested', { chain_id: config.chain.id })
+        void wallet.connect()
+      }}
     >
       {wallet.status === 'connecting' ? 'Connecting…' : 'Connect wallet'}
     </Button>

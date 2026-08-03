@@ -228,8 +228,11 @@ a {
 }
 .app-shell {
   min-height: 100vh;
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  display: flex;
+  flex-direction: column;
+}
+.app-shell > main {
+  flex: 1;
 }
 .site-header {
   width: min(1180px, calc(100% - 3rem));
@@ -284,6 +287,69 @@ nav a.active {
   background: #f2c35b;
   color: #241b08;
   font-size: 0.875rem;
+}
+.system-status {
+  border-bottom: 1px solid var(--line);
+  background: #0c1c16;
+  font:
+    0.7rem 'DM Mono',
+    monospace;
+}
+.system-status details {
+  width: min(1180px, calc(100% - 3rem));
+  margin: 0 auto;
+}
+.system-status summary {
+  min-height: 2.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+  color: var(--muted);
+  list-style-position: inside;
+}
+.system-status__dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.system-status--degraded .system-status__dot {
+  background: #f2c35b;
+}
+.system-status--unavailable .system-status__dot {
+  background: #ff8c61;
+}
+.system-status__details {
+  padding: 0.75rem 0 1rem;
+  border-top: 1px solid var(--line);
+}
+.system-status__details dl {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  background: var(--line);
+}
+.system-status__details dl > div {
+  padding: 0.75rem;
+  background: #08130f;
+}
+.system-status__details dt,
+.system-status__details p,
+.system-status__details time {
+  color: var(--muted);
+}
+.system-status__details dd {
+  margin: 0.35rem 0 0;
+  color: var(--ink);
+  text-transform: capitalize;
+}
+.system-status__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 .page {
   width: min(1180px, calc(100% - 3rem));
@@ -1390,7 +1456,18 @@ footer {
     grid-template-columns: 1fr auto;
   }
   nav {
-    display: none;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    padding: 0.9rem 0;
+    gap: 1.25rem;
+    overflow-x: auto;
+  }
+  .system-status details {
+    width: min(100% - 2rem, 1180px);
+  }
+  .system-status__details dl {
+    grid-template-columns: 1fr 1fr;
   }
   .page,
   footer {

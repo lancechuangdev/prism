@@ -25,6 +25,7 @@ import {
   operationSummary,
   validateOperation,
 } from '../lib/governance'
+import { track } from '../lib/telemetry'
 import { useWallet } from '../wallet/WalletProvider'
 
 const api = createApiClient(config)
@@ -224,6 +225,11 @@ export function GovernancePage() {
         auth.token,
       )
       setPrepared(data)
+      track('proposal_prepared', {
+        operation: operation.type,
+        chain_id: config.chain.id,
+        result: 'success',
+      })
       setLookupHash(data.proposal.transactionHash)
       await loadStatus(data.proposal.transactionHash).catch(() => undefined)
     } catch (cause) {

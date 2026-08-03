@@ -35,6 +35,7 @@ const environmentSchema = z.object({
   VITE_PRISM_COGNITO_CLIENT_ID: z.string().optional(),
   VITE_PRISM_COGNITO_REDIRECT_URI: z.union([url, z.literal('')]).optional(),
   VITE_PRISM_COGNITO_LOGOUT_URI: z.union([url, z.literal('')]).optional(),
+  VITE_PRISM_TELEMETRY_ENDPOINT: z.union([url, z.literal('')]).optional(),
 })
 
 export type AppConfig = {
@@ -61,6 +62,7 @@ export type AppConfig = {
         logoutUri: string
         scopes: string[]
       }
+  telemetryEndpoint?: string
 }
 
 export class ConfigurationError extends Error {
@@ -131,6 +133,7 @@ export function parseConfig(environment: Record<string, unknown>): AppConfig {
               'prism/admin.read',
             ],
           },
+    telemetryEndpoint: values.VITE_PRISM_TELEMETRY_ENDPOINT || undefined,
   }
 }
 
