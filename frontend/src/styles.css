@@ -53,6 +53,41 @@ select {
   color: var(--muted);
   line-height: 1.6;
 }
+.notification-opt-in,
+.notification-status {
+  margin: 1rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+.notification-opt-in {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.notification-opt-in p {
+  margin: 0;
+}
+.activity-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1rem 0;
+  color: var(--muted);
+  font:
+    0.7rem 'DM Mono',
+    monospace;
+}
+.activity-controls select {
+  min-height: 2.5rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: #0c1c16;
+  color: var(--ink);
+}
 .governance-login {
   display: grid;
   gap: 0.75rem;
@@ -1574,6 +1609,11 @@ footer {
   .proposal-heading,
   .lookup-form {
     align-items: start;
+    flex-direction: column;
+  }
+  .notification-opt-in,
+  .activity-controls {
+    align-items: stretch;
     flex-direction: column;
   }
   .activity-list article {

@@ -4,8 +4,10 @@ import type { PoolRecord } from './pools'
 import {
   actionableCount,
   borrowerClaimAvailable,
+  borrowerRedemption,
   borrowerRefundAvailable,
   lenderClaimAvailable,
+  lenderRedemption,
   lenderRefundAvailable,
   type UserPoolPosition,
 } from './portfolio'
@@ -61,6 +63,7 @@ function position(overrides: Partial<UserPoolPosition> = {}): UserPoolPosition {
   return {
     pool,
     liveState: '1',
+    redemptionSafe: true,
     lender: {
       stakeAmount: 250n,
       refundAmount: 0n,
@@ -104,5 +107,34 @@ describe('portfolio eligibility and amounts', () => {
 
   it('counts each independently available lifecycle action', () => {
     expect(actionableCount([position()])).toBe(4)
+  })
+
+  it('calculates closed-pool redemption proceeds for isolated tokens', () => {
+    const closedPool = {
+      ...pool,
+      data: {
+        ...pool.data!,
+        finishAmountLend: '880',
+        finishAmountBorrow: '60',
+      },
+    }
+    const closed = position({
+      pool: closedPool,
+      liveState: '2',
+      lender: { ...position().lender, positionBalance: 200n },
+      borrower: { ...position().borrower, positionBalance: 40n },
+    })
+    expect(lenderRedemption(closed)).toBe(220n)
+    expect(borrowerRedemption(closed)).toBe(30n)
+    expect(actionableCount([closed])).toBe(2)
+  })
+
+  it('blocks redemption when position tokens are reused', () => {
+    const unsafe = position({
+      liveState: '2',
+      redemptionSafe: false,
+      lender: { ...position().lender, positionBalance: 200n },
+    })
+    expect(lenderRedemption(unsafe)).toBe(0n)
   })
 })

@@ -39,6 +39,10 @@ PRISM_WALLET_ADDRESS=0x... npm run fund:local
 
 The portfolio reads wallet positions and protocol events directly from the chain. Set `VITE_PRISM_DEPLOYMENT_BLOCK` to the PrismPool deployment block in hosted environments so activity queries do not scan from genesis; local development defaults to block `0`. Claim and refund buttons are shown only when the live pool state and wallet records make the action eligible, and each transaction is simulated before broadcast.
 
+Closed-pool redemption is enabled only when every lender and borrower position-token address is unique across all live pools. The frontend redeems the connected wallet's complete position-token balance, previews the proportional lend proceeds or remaining collateral, simulates the burn and transfer, and refreshes the position after confirmation. Reused position-token deployments remain blocked because a wallet balance cannot be attributed safely to one pool.
+
+Portfolio activity is reconstructed from contract events, enriched with block timestamps and confirmation counts, and can be filtered by position side or redemption type. This live RPC history is useful for the connected deployment but is not a replacement for the reorganization-aware, paginated backend indexer described in the backend roadmap.
+
 ## Product areas
 
 ### Pool marketplace
@@ -235,12 +239,12 @@ Affected actions should be hidden or disabled with a clear explanation. These li
 
 These items depend on protocol or backend work and should not be enabled until the underlying capability is implemented and audited:
 
-- safe lender and borrower position-token redemption after the protocol accounting redesign;
-- refunds for cancelled pools;
-- indexed wallet positions and historical performance;
-- richer event and transaction history APIs;
-- keeper status and last-action reporting; and
-- notification delivery for maturity, claims, and liquidation risk.
+- [x] Enable lender and borrower position-token redemption only for deployments where every live pool has isolated position-token contracts; reused-token deployments remain blocked.
+- [ ] Add refunds for cancelled pools after refund functions exist in the deployed protocol.
+- [ ] Add indexed wallet positions and historical performance after the backend wallet indexer exists.
+- [x] Enrich live contract-event history with timestamps, confirmation counts, filtering, and incremental display; paginated backend history remains pending.
+- [ ] Add keeper heartbeat and last-action reporting after the backend exposes them; the current UI reports only the authorized on-chain liquidator.
+- [x] Add opt-in maturity, claim, refund, and liquidation-risk browser alerts while Prism is open; background push delivery requires a notification backend and service worker.
 
 ## Definition of done for financial actions
 

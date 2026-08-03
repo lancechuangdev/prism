@@ -7,6 +7,8 @@ export const prismPoolAbi = parseAbi([
   'function refundExcessCollateral(uint256 poolId)',
   'function claimLenderPosition(uint256 poolId)',
   'function claimBorrowerPositionAndLoan(uint256 poolId)',
+  'function withdrawLend(uint256 poolId, uint256 lenderPosition)',
+  'function withdrawBorrow(uint256 poolId, uint256 borrowerPosition)',
   'function globalPaused() view returns (bool)',
   'function liquidator() view returns (address)',
   'function minLendAmount() view returns (uint256)',
@@ -31,4 +33,5 @@ export const erc20Abi = parseAbi([
   'function balanceOf(address account) view returns (uint256)',
   'function decimals() view returns (uint8)',
   'function symbol() view returns (string)',
+  'function totalSupply() view returns (uint256)',
 ])

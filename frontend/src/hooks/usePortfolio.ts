@@ -16,6 +16,7 @@ type PortfolioState = {
   activity: PortfolioActivity[]
   loading: boolean
   ignoredIndexedPools: number
+  unindexedLivePools: number
   error?: string
 }
 
@@ -38,6 +39,7 @@ export function usePortfolio(pools: PoolRecord[], account?: Address) {
     activity: [],
     loading: false,
     ignoredIndexedPools: 0,
+    unindexedLivePools: 0,
   })
 
   const load = useCallback(async () => {
@@ -47,6 +49,7 @@ export function usePortfolio(pools: PoolRecord[], account?: Address) {
         activity: [],
         loading: false,
         ignoredIndexedPools: 0,
+        unindexedLivePools: 0,
       })
       return
     }
@@ -59,6 +62,7 @@ export function usePortfolio(pools: PoolRecord[], account?: Address) {
       setState({
         positions: positionResult.positions,
         ignoredIndexedPools: positionResult.ignoredIndexedPools,
+        unindexedLivePools: positionResult.unindexedLivePools,
         activity,
         loading: false,
       })
@@ -85,6 +89,20 @@ async function readPositions(pools: PoolRecord[], account: Address) {
     functionName: 'poolCount',
   })
   const livePools = pools.filter((pool) => BigInt(pool.index) < poolCount)
+  const completePoolSet = BigInt(livePools.length) === poolCount
+  const tokenUseCounts = livePools.reduce<Record<string, number>>(
+    (counts, pool) => {
+      for (const token of [
+        pool.base.lenderPositionToken,
+        pool.base.borrowerPositionToken,
+      ]) {
+        const key = token.toLowerCase()
+        counts[key] = (counts[key] ?? 0) + 1
+      }
+      return counts
+    },
+    {},
+  )
   const positions = await Promise.all(
     livePools.map(async (pool): Promise<UserPoolPosition> => {
       const [
@@ -127,6 +145,10 @@ async function readPositions(pools: PoolRecord[], account: Address) {
       ])
       return {
         pool,
+        redemptionSafe:
+          completePoolSet &&
+          tokenUseCounts[pool.base.lenderPositionToken.toLowerCase()] === 1 &&
+          tokenUseCounts[pool.base.borrowerPositionToken.toLowerCase()] === 1,
         liveState: String(liveState) as UserPoolPosition['liveState'],
         lender: {
           stakeAmount: lender[0],
@@ -154,6 +176,7 @@ async function readPositions(pools: PoolRecord[], account: Address) {
         position.borrower.positionBalance > 0n,
     ),
     ignoredIndexedPools: pools.length - livePools.length,
+    unindexedLivePools: Math.max(Number(poolCount) - livePools.length, 0),
   }
 }
 
@@ -247,11 +270,28 @@ async function readActivity(account: Address) {
   add('claim-borrow', claimBorrow, 'jpAmount')
   add('withdraw-lend', withdrawLend, 'lendAmount')
   add('withdraw-borrow', withdrawBorrow, 'collateralAmount')
-  return activity.sort((left, right) =>
+  activity.sort((left, right) =>
     left.blockNumber === right.blockNumber
       ? 0
       : left.blockNumber > right.blockNumber
         ? -1
         : 1,
   )
+  const latestBlock = await publicClient.getBlockNumber().catch(() => undefined)
+  const timestamps = new Map<bigint, Date>()
+  await Promise.allSettled(
+    [...new Set(activity.slice(0, 100).map((item) => item.blockNumber))].map(
+      async (blockNumber) => {
+        const block = await publicClient.getBlock({ blockNumber })
+        timestamps.set(blockNumber, new Date(Number(block.timestamp) * 1000))
+      },
+    ),
+  )
+  for (const item of activity) {
+    item.timestamp = timestamps.get(item.blockNumber)
+    item.confirmations = latestBlock
+      ? Number(latestBlock - item.blockNumber + 1n)
+      : undefined
+  }
+  return activity
 }

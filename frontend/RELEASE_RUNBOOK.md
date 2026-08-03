@@ -71,3 +71,5 @@ Direct users to verify the selected network, contract addresses, wallet account,
 ## Known observability limits
 
 The frontend can verify that a nonzero liquidator address is authorized on-chain, but the backend does not expose scheduler heartbeat, last successful keeper cycle, or last liquidation attempt. “Address configured” must not be interpreted as keeper health. Indexed timestamps describe stored records, not a chain head or finalized indexer checkpoint.
+
+Browser portfolio notifications run only while Prism is open and are deduplicated for the current tab session. There is no service worker, push subscription, notification backend, or guaranteed background delivery. Cancelled-pool refunds remain unavailable because the deployed protocol has no compatible refund function.

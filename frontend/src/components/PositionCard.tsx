@@ -1,8 +1,10 @@
 import { formatTokenAmount } from '../lib/format'
 import {
   borrowerClaimAvailable,
+  borrowerRedemption,
   borrowerRefundAvailable,
   lenderClaimAvailable,
+  lenderRedemption,
   lenderRefundAvailable,
   type UserPoolPosition,
 } from '../lib/portfolio'
@@ -45,6 +47,8 @@ export function PositionCard({
   const borrowerRefund = borrowerRefundAvailable(position)
   const lenderClaim = lenderClaimAvailable(position)
   const borrowerClaim = borrowerClaimAvailable(position)
+  const lenderProceeds = lenderRedemption(position)
+  const borrowerProceeds = borrowerRedemption(position)
 
   return (
     <article className="position-card">
@@ -97,6 +101,16 @@ export function PositionCard({
                 )}
               </dd>
             </div>
+            <div>
+              <dt>Redeemable proceeds</dt>
+              <dd>
+                {formatTokenAmount(
+                  lenderProceeds,
+                  pool.base.lendToken.decimals,
+                )}{' '}
+                {pool.base.lendToken.symbol}
+              </dd>
+            </div>
           </dl>
         </section>
       ) : null}
@@ -144,6 +158,16 @@ export function PositionCard({
                   borrower.positionBalance,
                   pool.base.collateralToken.decimals,
                 )}
+              </dd>
+            </div>
+            <div>
+              <dt>Redeemable collateral</dt>
+              <dd>
+                {formatTokenAmount(
+                  borrowerProceeds,
+                  pool.base.collateralToken.decimals,
+                )}{' '}
+                {pool.base.collateralToken.symbol}
               </dd>
             </div>
           </dl>

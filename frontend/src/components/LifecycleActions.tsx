@@ -6,8 +6,10 @@ import { prismPoolAbi } from '../lib/contracts/abis'
 import { publicClient } from '../lib/contracts/client'
 import {
   borrowerClaimAvailable,
+  borrowerRedemption,
   borrowerRefundAvailable,
   lenderClaimAvailable,
+  lenderRedemption,
   lenderRefundAvailable,
   type UserPoolPosition,
 } from '../lib/portfolio'
@@ -15,7 +17,12 @@ import { useWallet } from '../wallet/WalletProvider'
 import { Button } from './Button'
 
 type LifecycleAction =
-  'refund-lend' | 'refund-borrow' | 'claim-lend' | 'claim-borrow'
+  | 'refund-lend'
+  | 'refund-borrow'
+  | 'claim-lend'
+  | 'claim-borrow'
+  | 'redeem-lend'
+  | 'redeem-borrow'
 type ActionState = {
   stage: 'idle' | 'wallet' | 'confirming' | 'success' | 'error'
   action?: LifecycleAction
@@ -31,6 +38,9 @@ const actionConfig: Record<
       | 'refundExcessCollateral'
       | 'claimLenderPosition'
       | 'claimBorrowerPositionAndLoan'
+      | 'withdrawLend'
+      | 'withdrawBorrow'
+    positionSide?: 'lender' | 'borrower'
     pending: string
     success: string
   }
@@ -54,6 +64,18 @@ const actionConfig: Record<
     functionName: 'claimBorrowerPositionAndLoan',
     pending: 'Claim borrower position and loan',
     success: 'Borrower position tokens and loan claimed.',
+  },
+  'redeem-lend': {
+    functionName: 'withdrawLend',
+    positionSide: 'lender',
+    pending: 'Redeem lender position',
+    success: 'Lender position redeemed for available proceeds.',
+  },
+  'redeem-borrow': {
+    functionName: 'withdrawBorrow',
+    positionSide: 'borrower',
+    pending: 'Redeem borrower position',
+    success: 'Borrower position redeemed for available collateral.',
   },
 }
 
@@ -87,6 +109,8 @@ export function LifecycleActions({
   if (lenderClaimAvailable(position) > 0n) actions.push('claim-lend')
   if (borrowerClaimAvailable(position).position > 0n)
     actions.push('claim-borrow')
+  if (lenderRedemption(position) > 0n) actions.push('redeem-lend')
+  if (borrowerRedemption(position) > 0n) actions.push('redeem-borrow')
 
   async function execute(action: LifecycleAction) {
     if (!wallet.account || !wallet.walletClient || paused) return
@@ -98,7 +122,12 @@ export function LifecycleActions({
         address: config.contracts.pool,
         abi: prismPoolAbi,
         functionName: selected.functionName,
-        args: [BigInt(position.pool.index)],
+        args: selected.positionSide
+          ? [
+              BigInt(position.pool.index),
+              position[selected.positionSide].positionBalance,
+            ]
+          : [BigInt(position.pool.index)],
       })
       const hash = await wallet.walletClient.writeContract(simulation.request)
       setState({ stage: 'confirming', action, hash })
@@ -127,6 +156,14 @@ export function LifecycleActions({
     }
   }
 
+  if (position.liveState === '4')
+    return (
+      <p className="form-error">
+        This pool was cancelled, but the deployed contract has no cancelled-pool
+        refund function. Funds cannot be recovered through the frontend until
+        the protocol adds and audits that capability.
+      </p>
+    )
   if (actions.length === 0)
     return (
       <p className="position-caught-up">
@@ -156,6 +193,15 @@ export function LifecycleActions({
       {paused && (
         <p className="form-error">The Prism pool contract is paused.</p>
       )}
+      {!position.redemptionSafe &&
+        (position.lender.positionBalance > 0n ||
+          position.borrower.positionBalance > 0n) && (
+          <p className="form-error">
+            Redemption is disabled because position-token isolation cannot be
+            proven across every live pool. The index may be incomplete or this
+            deployment may reuse a position-token contract.
+          </p>
+        )}
       {state.message && (
         <div
           className={`transaction-message transaction-message--${state.stage}`}

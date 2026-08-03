@@ -16,6 +16,7 @@ export type UserPoolPosition = {
   liveState: PoolState
   lender: UserPoolSide
   borrower: UserPoolSide
+  redemptionSafe: boolean
 }
 
 export type ActivityKind =
@@ -35,6 +36,8 @@ export type PortfolioActivity = {
   token?: Address
   transactionHash: Hash
   blockNumber: bigint
+  timestamp?: Date
+  confirmations?: number
 }
 
 export const activityLabels: Record<ActivityKind, string> = {
@@ -113,6 +116,42 @@ export function borrowerClaimAvailable(position: UserPoolPosition) {
   }
 }
 
+export function lenderRedemption(position: UserPoolPosition) {
+  if (
+    !position.redemptionSafe ||
+    !['2', '3'].includes(position.liveState) ||
+    position.lender.positionBalance === 0n ||
+    !position.pool.data
+  )
+    return 0n
+  const settled = BigInt(position.pool.data.settleAmountLend)
+  if (settled === 0n) return 0n
+  const available = BigInt(
+    position.liveState === '2'
+      ? position.pool.data.finishAmountLend
+      : position.pool.data.liquidationAmountLend,
+  )
+  return (available * position.lender.positionBalance) / settled
+}
+
+export function borrowerRedemption(position: UserPoolPosition) {
+  if (
+    !position.redemptionSafe ||
+    !['2', '3'].includes(position.liveState) ||
+    position.borrower.positionBalance === 0n ||
+    !position.pool.data
+  )
+    return 0n
+  const settled = BigInt(position.pool.data.settleAmountBorrow)
+  if (settled === 0n) return 0n
+  const available = BigInt(
+    position.liveState === '2'
+      ? position.pool.data.finishAmountBorrow
+      : position.pool.data.liquidationAmountBorrow,
+  )
+  return (available * position.borrower.positionBalance) / settled
+}
+
 export function actionableCount(positions: UserPoolPosition[]) {
   return positions.reduce(
     (total, position) =>
@@ -120,7 +159,9 @@ export function actionableCount(positions: UserPoolPosition[]) {
       Number(lenderRefundAvailable(position) > 0n) +
       Number(borrowerRefundAvailable(position) > 0n) +
       Number(lenderClaimAvailable(position) > 0n) +
-      Number(borrowerClaimAvailable(position).position > 0n),
+      Number(borrowerClaimAvailable(position).position > 0n) +
+      Number(lenderRedemption(position) > 0n) +
+      Number(borrowerRedemption(position) > 0n),
     0,
   )
 }

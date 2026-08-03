@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { Button } from '../components/Button'
 import { PositionCard } from '../components/PositionCard'
+import { PortfolioNotifications } from '../components/PortfolioNotifications'
 import { config } from '../config/env'
 import { usePools } from '../hooks/usePools'
 import { usePortfolio } from '../hooks/usePortfolio'
@@ -15,6 +16,8 @@ import {
   borrowerRefundAvailable,
   lenderClaimAvailable,
   lenderRefundAvailable,
+  lenderRedemption,
+  borrowerRedemption,
   type PortfolioActivity,
 } from '../lib/portfolio'
 import { collateralHealth } from '../lib/pools'
@@ -59,6 +62,8 @@ export function PortfolioPage() {
   const portfolio = usePortfolio(poolsState.pools, wallet.account)
   const [paused, setPaused] = useState<boolean>()
   const [now] = useState(() => Date.now())
+  const [activityFilter, setActivityFilter] = useState('all')
+  const [activityLimit, setActivityLimit] = useState(25)
   const refreshAll = useCallback(() => {
     void poolsState.refresh()
     void portfolio.refresh()
@@ -88,10 +93,12 @@ export function PortfolioPage() {
             lenderRefundAvailable(position) +
             borrowerRefundAvailable(position) +
             lenderClaimAvailable(position) +
-            borrowerClaimAvailable(position).position
+            borrowerClaimAvailable(position).position +
+            lenderRedemption(position) +
+            borrowerRedemption(position)
           if (available > 0n)
             notices.push(
-              `Pool ${position.pool.index} has a claim or refund ready.`,
+              `Pool ${position.pool.index} has a claim, refund, or redemption ready.`,
             )
           if (
             position.liveState === '1' &&
@@ -119,6 +126,17 @@ export function PortfolioPage() {
             : [],
         ),
     [now, portfolio.positions],
+  )
+  const filteredActivity = useMemo(
+    () =>
+      portfolio.activity.filter((activity) => {
+        if (activityFilter === 'all') return true
+        if (activityFilter === 'lender') return activity.kind.endsWith('lend')
+        if (activityFilter === 'borrower')
+          return activity.kind.endsWith('borrow')
+        return activity.kind === activityFilter
+      }),
+    [activityFilter, portfolio.activity],
   )
 
   if (!wallet.account)
@@ -184,6 +202,20 @@ export function PortfolioPage() {
           </div>
         </div>
       )}
+      {portfolio.unindexedLivePools > 0 && (
+        <div className="inline-message inline-message--error" role="alert">
+          <div>
+            <strong>Backend index is behind the contract</strong>
+            <p>
+              {portfolio.unindexedLivePools} live{' '}
+              {portfolio.unindexedLivePools === 1 ? 'pool is' : 'pools are'}{' '}
+              missing from indexed data. Redemption is disabled because
+              position-token isolation cannot be proven across the complete pool
+              set.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="portfolio-summary">
         <article>
           <span>Positions</span>
@@ -193,7 +225,7 @@ export function PortfolioPage() {
         <article>
           <span>Available actions</span>
           <strong>{actionableCount(portfolio.positions)}</strong>
-          <small>Claims and refunds</small>
+          <small>Claims, refunds, and safe redemptions</small>
         </article>
         <article>
           <span>Protocol status</span>
@@ -214,6 +246,7 @@ export function PortfolioPage() {
               {notice}
             </p>
           ))}
+          <PortfolioNotifications notices={notifications} />
         </section>
       )}
       <section className="portfolio-section">
@@ -259,14 +292,37 @@ export function PortfolioPage() {
           </div>
           <span>{portfolio.activity.length}</span>
         </div>
+        <div className="activity-controls">
+          <label>
+            <span className="sr-only">Filter portfolio activity</span>
+            <select
+              value={activityFilter}
+              onChange={(event) => {
+                setActivityFilter(event.target.value)
+                setActivityLimit(25)
+              }}
+            >
+              <option value="all">All activity</option>
+              <option value="lender">Lender activity</option>
+              <option value="borrower">Borrower activity</option>
+              <option value="withdraw-lend">Lender redemptions</option>
+              <option value="withdraw-borrow">Borrower redemptions</option>
+            </select>
+          </label>
+          <span>
+            Live events · {filteredActivity.length} matching · newest first
+          </span>
+        </div>
         {portfolio.activity.length === 0 ? (
           <p className="activity-empty">
             No Prism activity was found from deployment block{' '}
             {config.contracts.deploymentBlock.toString()}.
           </p>
+        ) : filteredActivity.length === 0 ? (
+          <p className="activity-empty">No activity matches this filter.</p>
         ) : (
           <div className="activity-list">
-            {portfolio.activity.map((activity) => {
+            {filteredActivity.slice(0, activityLimit).map((activity) => {
               const asset = activityAsset(activity, portfolio.positions)
               return (
                 <article key={`${activity.transactionHash}:${activity.kind}`}>
@@ -278,6 +334,17 @@ export function PortfolioPage() {
                     <small>
                       Pool {activity.poolIndex} · Block{' '}
                       {activity.blockNumber.toString()}
+                      {activity.timestamp && (
+                        <>
+                          {' '}
+                          ·{' '}
+                          <time dateTime={activity.timestamp.toISOString()}>
+                            {activity.timestamp.toLocaleString()}
+                          </time>
+                        </>
+                      )}
+                      {activity.confirmations !== undefined &&
+                        ` · ${activity.confirmations} confirmation${activity.confirmations === 1 ? '' : 's'}`}
                     </small>
                   </div>
                   <span>
@@ -298,6 +365,14 @@ export function PortfolioPage() {
                 </article>
               )
             })}
+            {filteredActivity.length > activityLimit && (
+              <Button
+                variant="secondary"
+                onClick={() => setActivityLimit((current) => current + 25)}
+              >
+                Show 25 more
+              </Button>
+            )}
           </div>
         )}
       </section>
