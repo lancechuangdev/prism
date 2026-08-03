@@ -43,6 +43,16 @@ func TestLoadRedisTLSConfiguration(t *testing.T) {
 	}
 }
 
+func TestLoadCORSConfiguration(t *testing.T) {
+	t.Setenv("PRISM_CORS_ALLOWED_ORIGINS", "https://prismapp.link")
+
+	cfg := Load()
+
+	if cfg.CORSAllowedOrigins != "https://prismapp.link" {
+		t.Fatalf("CORS allowed origins = %q", cfg.CORSAllowedOrigins)
+	}
+}
+
 func TestLoadBuildsMySQLDSNFromSecretFields(t *testing.T) {
 	t.Setenv("PRISM_MYSQL_DSN", "")
 	t.Setenv("PRISM_MYSQL_HOST", "database.internal")
@@ -101,6 +111,7 @@ func TestValidateProductionAPIRejectsUnsafeDefaults(t *testing.T) {
 		"PRISM_STORE must be mysql",
 		"PRISM_POOL_ADDRESS is required",
 		"PRISM_MULTISIG_ADDRESS is required",
+		"PRISM_CORS_ALLOWED_ORIGINS is required",
 		"PRISM_REDIS_TLS must be true",
 		"PRISM_PRICE_PROVIDER must be chainlink",
 		"PRISM_ORACLE_ADDRESS is required",
@@ -177,5 +188,6 @@ func validProductionConfig() Config {
 		PriceProvider:       "chainlink",
 		OracleAddress:       "0x3000000000000000000000000000000000000003",
 		PriceTokenAddresses: `{"USDC":"0x4000000000000000000000000000000000000004"}`,
+		CORSAllowedOrigins:  "https://prismapp.link",
 	}
 }
