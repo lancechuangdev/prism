@@ -8,7 +8,7 @@
         "s3:ListBucket",
         "s3:GetBucketLocation"
       ],
-      "Resource": "arn:aws:s3:::YOUR_FRONTEND_BUCKET"
+      "Resource": "arn:aws:s3:::prism-frontend-production-448079093324"
     },
     {
       "Sid": "DeployFrontendObjects",
@@ -17,13 +17,13 @@
         "s3:PutObject",
         "s3:DeleteObject"
       ],
-      "Resource": "arn:aws:s3:::YOUR_FRONTEND_BUCKET/*"
+      "Resource": "arn:aws:s3:::prism-frontend-production-448079093324/*"
     },
     {
       "Sid": "InvalidateFrontendDistribution",
       "Effect": "Allow",
       "Action": "cloudfront:CreateInvalidation",
-      "Resource": "arn:aws:cloudfront::448079093324:distribution/YOUR_DISTRIBUTION_ID"
+      "Resource": "arn:aws:cloudfront::448079093324:distribution/E3QCKVXJ0DJCUX"
     }
   ]
 }
