@@ -30,6 +30,11 @@ const environmentSchema = z.object({
   VITE_PRISM_POOL_ADDRESS: address,
   VITE_PRISM_MULTISIG_ADDRESS: address,
   VITE_PRISM_DEPLOYMENT_BLOCK: z.string().regex(/^\d+$/).default('0'),
+  VITE_PRISM_AUTH_MODE: z.enum(['local', 'cognito']).default('local'),
+  VITE_PRISM_COGNITO_DOMAIN: z.string().optional(),
+  VITE_PRISM_COGNITO_CLIENT_ID: z.string().optional(),
+  VITE_PRISM_COGNITO_REDIRECT_URI: z.union([url, z.literal('')]).optional(),
+  VITE_PRISM_COGNITO_LOGOUT_URI: z.union([url, z.literal('')]).optional(),
 })
 
 export type AppConfig = {
@@ -46,6 +51,16 @@ export type AppConfig = {
     multisig: `0x${string}`
     deploymentBlock: bigint
   }
+  auth:
+    | { mode: 'local' }
+    | {
+        mode: 'cognito'
+        domain: string
+        clientId: string
+        redirectUri: string
+        logoutUri: string
+        scopes: string[]
+      }
 }
 
 export class ConfigurationError extends Error {
@@ -67,6 +82,20 @@ export function parseConfig(environment: Record<string, unknown>): AppConfig {
   }
 
   const values = result.data
+  const cognitoValues = [
+    values.VITE_PRISM_COGNITO_DOMAIN,
+    values.VITE_PRISM_COGNITO_CLIENT_ID,
+    values.VITE_PRISM_COGNITO_REDIRECT_URI,
+    values.VITE_PRISM_COGNITO_LOGOUT_URI,
+  ]
+  if (
+    values.VITE_PRISM_AUTH_MODE === 'cognito' &&
+    cognitoValues.some((value) => !value)
+  ) {
+    throw new ConfigurationError([
+      'Cognito domain, client ID, redirect URI, and logout URI are required when VITE_PRISM_AUTH_MODE=cognito',
+    ])
+  }
 
   return {
     apiUrl: values.VITE_PRISM_API_URL.replace(/\/$/, ''),
@@ -86,6 +115,22 @@ export function parseConfig(environment: Record<string, unknown>): AppConfig {
       multisig: values.VITE_PRISM_MULTISIG_ADDRESS,
       deploymentBlock: BigInt(values.VITE_PRISM_DEPLOYMENT_BLOCK),
     },
+    auth:
+      values.VITE_PRISM_AUTH_MODE === 'local'
+        ? { mode: 'local' }
+        : {
+            mode: 'cognito',
+            domain: values.VITE_PRISM_COGNITO_DOMAIN!,
+            clientId: values.VITE_PRISM_COGNITO_CLIENT_ID!,
+            redirectUri: values.VITE_PRISM_COGNITO_REDIRECT_URI!,
+            logoutUri: values.VITE_PRISM_COGNITO_LOGOUT_URI!,
+            scopes: [
+              'openid',
+              'profile',
+              'prism/proposals.write',
+              'prism/admin.read',
+            ],
+          },
   }
 }
 

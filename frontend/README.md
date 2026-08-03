@@ -144,6 +144,8 @@ User transactions such as token approval, lending deposits, collateral deposits,
 
 Production operator authentication uses Cognito access tokens with the `prism/proposals.write` and `prism/admin.read` scopes. Local development can use the backend's local login flow.
 
+The governance console reads multisig owners, thresholds, and proposal status without authentication. Preparing proposals requires operator authentication through `VITE_PRISM_AUTH_MODE=local` or Cognito Hosted UI with PKCE. Cognito deployments must set `VITE_PRISM_COGNITO_DOMAIN`, `VITE_PRISM_COGNITO_CLIENT_ID`, `VITE_PRISM_COGNITO_REDIRECT_URI`, and `VITE_PRISM_COGNITO_LOGOUT_URI`. Access tokens are kept in session storage, and the backend remains responsible for validating every token and scope. A connected owner wallet is separately required to simulate, approve, or execute an unsigned multisig transaction.
+
 ## Known protocol limitations
 
 The frontend must disclose protocol functionality that is incomplete or unsafe for production:
@@ -203,13 +205,13 @@ Affected actions should be hidden or disabled with a clear explanation. These li
 
 ### Phase 4: Multisig governance
 
-- Add local and Cognito authentication flows with scope-aware route protection.
-- Build multisig owner, threshold, and proposal detail views.
-- Add guided forms for all supported proposal operation types.
-- Present decoded proposal intent and validate inputs before submission.
-- Integrate owner-wallet approval and execution transactions.
-- Show quorum progress and refresh proposal state after confirmations.
-- Support copying and exporting unsigned transactions.
+- [x] Add local and Cognito authentication flows with scope-aware action protection.
+- [x] Build multisig owner, threshold, and proposal detail views.
+- [x] Add guided forms for all supported proposal operation types.
+- [x] Present decoded proposal intent and validate inputs before submission.
+- [x] Integrate owner-wallet approval and execution transactions.
+- [x] Show quorum progress and refresh proposal state after confirmations.
+- [x] Support copying and exporting unsigned transactions.
 
 **Exit criteria:** authorized multisig owners can prepare, review, approve, and execute supported protocol operations without manually constructing calldata.
 

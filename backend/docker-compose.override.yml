@@ -1,0 +1,9 @@
+services:
+  api:
+    environment:
+      PRISM_AUTH_MODE: cognito
+      PRISM_COGNITO_REGION: us-west-2
+      PRISM_COGNITO_USER_POOL_ID: us-west-2_PGypz4BEc
+      PRISM_COGNITO_CLIENT_ID: 3pio3qqvm161creo48trgbe1rp
+      PRISM_COGNITO_PROPOSAL_SCOPE: prism/proposals.write
+      PRISM_COGNITO_ADMIN_SCOPE: prism/admin.read

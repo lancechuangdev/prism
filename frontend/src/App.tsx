@@ -1,7 +1,7 @@
 import { AppShell } from './components/AppShell'
 import { HomePage } from './pages/HomePage'
+import { GovernancePage } from './pages/GovernancePage'
 import { NotFoundPage } from './pages/NotFoundPage'
-import { PlaceholderPage } from './pages/PlaceholderPage'
 import { PortfolioPage } from './pages/PortfolioPage'
 import { PoolDetailPage } from './pages/PoolDetailPage'
 import { PoolMarketplacePage } from './pages/PoolMarketplacePage'
@@ -18,14 +18,7 @@ function CurrentPage() {
     case '/portfolio':
       return <PortfolioPage />
     case '/governance':
-      return (
-        <PlaceholderPage
-          eyebrow="Multisig"
-          title="Governance without raw calldata"
-          description="The operator console will turn Prism proposals into clear, reviewable actions."
-          requiresWallet
-        />
-      )
+      return <GovernancePage />
     default: {
       const poolMatch = pathname.match(/^\/pools\/(\d+)$/)
       return poolMatch ? (

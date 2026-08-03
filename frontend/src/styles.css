@@ -29,8 +29,174 @@ body {
     radial-gradient(circle at 80% -20%, #214d3c 0, transparent 35rem), #08130f;
 }
 button,
-input {
+input,
+select {
   font: inherit;
+}
+.governance-page {
+  padding: clamp(4rem, 8vw, 7rem) 0 6rem;
+}
+.governance-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  gap: 4rem;
+  align-items: end;
+  margin-bottom: 3rem;
+}
+.governance-hero h1 {
+  font-size: clamp(3.5rem, 7vw, 6.5rem);
+}
+.governance-hero > div > p:last-child,
+.empty-copy,
+.transaction-note,
+.governance-disclosure {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.governance-login {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  background: #0c1c16;
+}
+.governance-login label,
+.governance-form label {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--muted);
+  font:
+    0.72rem 'DM Mono',
+    monospace;
+}
+.governance-panel input,
+.governance-panel select {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: #08130f;
+  color: var(--ink);
+}
+.governance-panel input:focus,
+.governance-panel select:focus {
+  outline: 1px solid var(--accent);
+  border-color: var(--accent);
+}
+.governance-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  margin: 1rem 0;
+  align-items: start;
+}
+.governance-panel {
+  padding: 1.5rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface), transparent 30%);
+}
+.governance-panel h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+.governance-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.governance-form > .eyebrow,
+.governance-form > .proposal-review,
+.governance-form > .form-errors,
+.governance-form > .button,
+.governance-form > small {
+  grid-column: 1 / -1;
+}
+.proposal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+.proposal-heading .eyebrow {
+  margin-bottom: 0.5rem;
+}
+.proposal-heading > strong {
+  color: var(--accent);
+  font:
+    500 2rem 'DM Mono',
+    monospace;
+}
+.owner-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1px;
+  margin-top: 1.5rem;
+  background: var(--line);
+}
+.owner-list > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.9rem;
+  background: #0c1c16;
+}
+.owner-list span {
+  color: var(--accent);
+  font:
+    0.68rem 'DM Mono',
+    monospace;
+  text-transform: uppercase;
+}
+.proposal-review {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1rem;
+  border-left: 2px solid var(--accent);
+  background: #0c1c16;
+}
+.proposal-review span,
+.proposal-review small {
+  color: var(--muted);
+}
+.form-errors,
+.form-error {
+  color: #ff9d74;
+}
+.warning-box {
+  margin: 1rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid #7a4b32;
+  background: #291711;
+  color: #ffd0b9;
+}
+.lookup-form,
+.proposal-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+.prepared-proposal {
+  margin-top: 2rem;
+}
+.prepared-proposal dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.prepared-proposal dt {
+  color: var(--muted);
+}
+.prepared-proposal dd {
+  margin: 0;
+}
+.proposal-actions {
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+.governance-disclosure {
+  max-width: 850px;
+  margin-top: 2rem;
 }
 a {
   color: inherit;
@@ -1314,6 +1480,24 @@ footer {
   }
   .position-grid {
     grid-template-columns: 1fr;
+  }
+  .governance-hero,
+  .governance-grid {
+    grid-template-columns: 1fr;
+  }
+  .governance-hero {
+    gap: 2rem;
+  }
+  .governance-form {
+    grid-template-columns: 1fr;
+  }
+  .governance-form > * {
+    grid-column: 1;
+  }
+  .proposal-heading,
+  .lookup-form {
+    align-items: start;
+    flex-direction: column;
   }
   .activity-list article {
     grid-template-columns: auto 1fr auto;

@@ -12,6 +12,11 @@ interface ImportMetaEnv {
   readonly VITE_PRISM_POOL_ADDRESS: string
   readonly VITE_PRISM_MULTISIG_ADDRESS: string
   readonly VITE_PRISM_DEPLOYMENT_BLOCK?: string
+  readonly VITE_PRISM_AUTH_MODE?: 'local' | 'cognito'
+  readonly VITE_PRISM_COGNITO_DOMAIN?: string
+  readonly VITE_PRISM_COGNITO_CLIENT_ID?: string
+  readonly VITE_PRISM_COGNITO_REDIRECT_URI?: string
+  readonly VITE_PRISM_COGNITO_LOGOUT_URI?: string
 }
 
 interface ImportMeta {

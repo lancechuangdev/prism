@@ -59,3 +59,44 @@ export type PriceQuote = {
   source: string
   updatedAt: string
 }
+
+export type MultisigConfig = {
+  chain_id: string
+  contract_address: string
+  owners: string[]
+  threshold: number
+}
+export type OwnerApproval = { address: string; approved: boolean }
+export type ProposalStatus = {
+  transactionHash: string
+  currentConfigurationVersion: string
+  proposalConfigurationVersion: string | null
+  configurationValid: boolean
+  approvalCount: number
+  threshold: number
+  readyToExecute: boolean
+  executed: boolean
+  owners: OwnerApproval[]
+}
+export type PreparedTransaction = {
+  to: string
+  data: string
+  value: string
+  chainId: string
+}
+export type PreparedProposal = {
+  proposal: {
+    transactionHash: string
+    operation: string
+    target: string
+    value: string
+    data: string
+    nonce: string
+  }
+  approvalTransaction: PreparedTransaction
+  executionTransaction: PreparedTransaction
+}
+export type ProposalOperation = {
+  type: string
+  params: Record<string, string | number>
+}
