@@ -27,6 +27,7 @@ snapshots/
 *.tfstate
 *.tfstate.*
 *.tfplan
+/infra/terraform/tfplan
 terraform.tfvars
 backend.hcl
 crash.log

@@ -154,6 +154,43 @@ The governance console reads multisig owners, thresholds, and proposal status wi
 
 Privacy-preserving product telemetry is disabled by default. Set `VITE_PRISM_TELEMETRY_ENDPOINT` only after the receiving system and privacy notice are approved. Events use an explicit allowlist, contain no wallet addresses, amounts, calldata, hashes, query strings, credentials, or tokens, and are suppressed when the browser sends Do Not Track. See [`RELEASE_RUNBOOK.md`](RELEASE_RUNBOOK.md) for deployment, target-network testing, rollback, incident, and support procedures.
 
+## AWS deployment with GitHub Actions
+
+The production deployment workflow is [`../.github/workflows/frontend-deploy.yml`](../.github/workflows/frontend-deploy.yml). It runs when a push to `main` changes `frontend/**` or the workflow itself, and it can also be started manually with `workflow_dispatch`. The job runs the frontend formatting, lint, test, dependency-audit, and production-build checks before changing AWS.
+
+The workflow authenticates to AWS with GitHub OIDC and short-lived credentials; it does not use stored AWS access keys. It uploads Vite's hashed `dist/assets` files to a private S3 bucket with a one-year immutable cache policy, uploads `index.html` with `no-cache`, and invalidates the configured CloudFront distribution. CloudFront serves the bucket through private origin access and handles TLS for the public frontend domain. The distribution must return `index.html` for SPA routes such as `/governance`, `/portfolio`, and `/pools/*`.
+
+The IAM role named by `FRONTEND_AWS_ROLE_ARN` must be assumable only by this repository's `production` environment. Its permissions should be limited to listing, uploading, and deleting objects in the configured frontend bucket and creating invalidations for only the configured CloudFront distribution.
+
+Configure these non-secret values in the GitHub `production` environment:
+
+```text
+AWS_REGION
+FRONTEND_AWS_ROLE_ARN
+FRONTEND_BUCKET
+FRONTEND_DISTRIBUTION_ID
+VITE_PRISM_API_URL
+VITE_PRISM_CHAIN_ID
+VITE_PRISM_CHAIN_NAME
+VITE_PRISM_RPC_URL
+VITE_PRISM_EXPLORER_URL
+VITE_PRISM_POOL_ADDRESS
+VITE_PRISM_MULTISIG_ADDRESS
+VITE_PRISM_DEPLOYMENT_BLOCK
+VITE_PRISM_AUTH_MODE
+VITE_PRISM_COGNITO_DOMAIN
+VITE_PRISM_COGNITO_CLIENT_ID
+VITE_PRISM_COGNITO_REDIRECT_URI
+VITE_PRISM_COGNITO_LOGOUT_URI
+VITE_PRISM_TELEMETRY_ENDPOINT
+```
+
+Every `VITE_` value is embedded in public browser JavaScript and must not contain a private key, Cognito client secret, access token, confidential RPC credential, or other secret. `VITE_PRISM_TELEMETRY_ENDPOINT` may be absent or empty to keep telemetry disabled. With `VITE_PRISM_AUTH_MODE=cognito`, register the exact production `/governance` callback and logout URLs on the public Cognito app client before deployment.
+
+For the current Sepolia deployment, the chain configuration is `VITE_PRISM_CHAIN_ID=11155111`, `VITE_PRISM_CHAIN_NAME=Sepolia`, `VITE_PRISM_EXPLORER_URL=https://sepolia.etherscan.io`, and `VITE_PRISM_DEPLOYMENT_BLOCK=11385984`. The pool and multisig addresses must match [`../protocol/deployments/sepolia.json`](../protocol/deployments/sepolia.json). Use a browser-safe public or domain-restricted Sepolia endpoint for `VITE_PRISM_RPC_URL`, because its value is visible to every visitor.
+
+After configuring the environment, push the workflow and frontend changes to `main` or start **Deploy frontend to AWS** from the repository's Actions page. Verify the deployed routes, Cognito login and logout, API readiness, target chain, contract addresses, security headers, and CloudFront cache behavior using [`RELEASE_RUNBOOK.md`](RELEASE_RUNBOOK.md) after every deployment.
+
 ## Known protocol limitations
 
 The frontend must disclose protocol functionality that is incomplete or unsafe for production:

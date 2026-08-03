@@ -1,0 +1,98 @@
+name: Deploy frontend to AWS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: prism-frontend-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy frontend
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      VITE_PRISM_API_URL: ${{ vars.VITE_PRISM_API_URL }}
+      VITE_PRISM_CHAIN_ID: ${{ vars.VITE_PRISM_CHAIN_ID }}
+      VITE_PRISM_CHAIN_NAME: ${{ vars.VITE_PRISM_CHAIN_NAME }}
+      VITE_PRISM_RPC_URL: ${{ vars.VITE_PRISM_RPC_URL }}
+      VITE_PRISM_EXPLORER_URL: ${{ vars.VITE_PRISM_EXPLORER_URL }}
+      VITE_PRISM_POOL_ADDRESS: ${{ vars.VITE_PRISM_POOL_ADDRESS }}
+      VITE_PRISM_MULTISIG_ADDRESS: ${{ vars.VITE_PRISM_MULTISIG_ADDRESS }}
+      VITE_PRISM_DEPLOYMENT_BLOCK: ${{ vars.VITE_PRISM_DEPLOYMENT_BLOCK }}
+      VITE_PRISM_AUTH_MODE: ${{ vars.VITE_PRISM_AUTH_MODE }}
+      VITE_PRISM_COGNITO_DOMAIN: ${{ vars.VITE_PRISM_COGNITO_DOMAIN }}
+      VITE_PRISM_COGNITO_CLIENT_ID: ${{ vars.VITE_PRISM_COGNITO_CLIENT_ID }}
+      VITE_PRISM_COGNITO_REDIRECT_URI: ${{ vars.VITE_PRISM_COGNITO_REDIRECT_URI }}
+      VITE_PRISM_COGNITO_LOGOUT_URI: ${{ vars.VITE_PRISM_COGNITO_LOGOUT_URI }}
+      VITE_PRISM_TELEMETRY_ENDPOINT: ${{ vars.VITE_PRISM_TELEMETRY_ENDPOINT }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Audit production dependencies
+        run: npm run security:check
+
+      - name: Build production frontend
+        run: npm run build
+
+      - name: Configure short-lived AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.FRONTEND_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Upload immutable assets
+        run: >-
+          aws s3 sync dist/assets
+          "s3://${{ vars.FRONTEND_BUCKET }}/assets"
+          --delete
+          --cache-control "public,max-age=31536000,immutable"
+
+      - name: Upload application shell
+        run: >-
+          aws s3 cp dist/index.html
+          "s3://${{ vars.FRONTEND_BUCKET }}/index.html"
+          --cache-control "no-cache"
+          --content-type "text/html"
+
+      - name: Invalidate CloudFront
+        run: >-
+          aws cloudfront create-invalidation
+          --distribution-id "${{ vars.FRONTEND_DISTRIBUTION_ID }}"
+          --paths "/*"
