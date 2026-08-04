@@ -2,8 +2,10 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/lancechuangdev/prism/backend/internal/chain"
@@ -22,18 +24,16 @@ type PoolSyncer struct {
 	repo         store.Repository
 	chainID      string
 	priceService *price.Service
-	symbol       string
 	liquidations LiquidationChecker
 	logger       *slog.Logger
 }
 
-func NewPoolSyncer(reader chain.Reader, repo store.Repository, chainID string, priceService *price.Service, symbol string, liquidations LiquidationChecker, logger *slog.Logger) *PoolSyncer {
+func NewPoolSyncer(reader chain.Reader, repo store.Repository, chainID string, priceService *price.Service, liquidations LiquidationChecker, logger *slog.Logger) *PoolSyncer {
 	return &PoolSyncer{
 		reader:       reader,
 		repo:         repo,
 		chainID:      chainID,
 		priceService: priceService,
-		symbol:       symbol,
 		liquidations: liquidations,
 		logger:       logger,
 	}
@@ -70,25 +70,10 @@ func (s *PoolSyncer) RunOnce(ctx context.Context) error {
 		slog.Int("tokens", len(tokens)),
 	)
 
-	if s.priceService != nil && s.symbol != "" {
-		quote, err := s.priceService.Latest(ctx, s.symbol)
-		if err != nil {
-			s.logger.Error(
-				"price provider refresh failed",
-				slog.String("event", "provider_failure"),
-				slog.String("provider", "chainlink_oracle"),
-				slog.String("symbol", s.symbol),
-				slog.Any("error", err),
-			)
-			return fmt.Errorf("refresh price %s: %w", s.symbol, err)
+	if s.priceService != nil {
+		if err := s.refreshTokenPrices(ctx, tokens, pools); err != nil {
+			return err
 		}
-		s.logger.Info(
-			"price refresh completed",
-			slog.String("symbol", quote.Symbol),
-			slog.String("currency", quote.Currency),
-			slog.String("price", quote.Price),
-			slog.String("source", quote.Source),
-		)
 	}
 
 	if s.liquidations != nil {
@@ -108,6 +93,53 @@ func (s *PoolSyncer) RunOnce(ctx context.Context) error {
 		slog.Int64("completed_at_unix", time.Now().Unix()),
 	)
 	return nil
+}
+
+func (s *PoolSyncer) refreshTokenPrices(ctx context.Context, tokens []store.TokenInfo, pools []store.PoolBase) error {
+	pricesByAddress := make(map[string]string, len(tokens))
+	var failures []error
+	for _, token := range tokens {
+		quote, err := s.priceService.Latest(ctx, token.Symbol)
+		if err != nil {
+			s.logger.Error(
+				"price provider refresh failed",
+				slog.String("event", "provider_failure"),
+				slog.String("provider", "chainlink_oracle"),
+				slog.String("symbol", token.Symbol),
+				slog.Any("error", err),
+			)
+			failures = append(failures, fmt.Errorf("refresh price %s: %w", token.Symbol, err))
+			continue
+		}
+
+		token.Price = quote.Price
+		if err := s.repo.UpsertToken(ctx, token); err != nil {
+			failures = append(failures, fmt.Errorf("save price for token %s: %w", token.Symbol, err))
+			continue
+		}
+		pricesByAddress[strings.ToLower(token.Key.Address)] = quote.Price
+		s.logger.Info(
+			"price refresh completed",
+			slog.String("symbol", quote.Symbol),
+			slog.String("currency", quote.Currency),
+			slog.String("price", quote.Price),
+			slog.String("source", quote.Source),
+		)
+	}
+
+	for _, pool := range pools {
+		if value, ok := pricesByAddress[strings.ToLower(pool.LendToken.Address)]; ok {
+			pool.LendToken.Price = value
+		}
+		if value, ok := pricesByAddress[strings.ToLower(pool.CollateralToken.Address)]; ok {
+			pool.CollateralToken.Price = value
+		}
+		if err := s.repo.UpsertPoolBase(ctx, pool); err != nil {
+			failures = append(failures, fmt.Errorf("save token prices for pool %d: %w", pool.Key.PoolID, err))
+		}
+	}
+
+	return errors.Join(failures...)
 }
 
 func (s *PoolSyncer) Run(ctx context.Context, interval time.Duration) error {

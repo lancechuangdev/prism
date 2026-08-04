@@ -88,7 +88,7 @@ func main() {
 		defer liquidationChain.Close()
 		liquidationChecker = liquidation.NewService(liquidationChain, logger)
 	}
-	syncer := scheduler.NewPoolSyncer(reader, repo, cfg.ChainID, priceService, cfg.PriceSymbol, liquidationChecker, logger)
+	syncer := scheduler.NewPoolSyncer(reader, repo, cfg.ChainID, priceService, liquidationChecker, logger)
 
 	logger.Info(
 		"scheduler starting",
