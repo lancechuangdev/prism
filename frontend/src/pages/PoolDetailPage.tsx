@@ -17,6 +17,7 @@ import {
   fundingPercentage,
   newestPoolUpdate,
 } from '../lib/pools'
+import { formatUsdPrice } from '../lib/prices'
 import { Link } from '../routing'
 
 function ExplorerAddress({ address }: { address: string }) {
@@ -35,11 +36,12 @@ function ExplorerAddress({ address }: { address: string }) {
 }
 
 function TokenPrice({ symbol, price }: { symbol: string; price: string }) {
-  if (!price || price === '0')
+  const formatted = formatUsdPrice(price)
+  if (formatted === undefined)
     return <span className="unavailable">Not indexed</span>
   return (
     <>
-      {formatTokenAmount(price, 8, 2)} USD <small>{symbol}</small>
+      {formatted} USD <small>{symbol}</small>
     </>
   )
 }

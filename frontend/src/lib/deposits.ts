@@ -1,6 +1,7 @@
 import { parseUnits } from 'viem'
 
 import type { PoolBase, TokenSnapshot } from './api/types'
+import { parseUsdPrice } from './prices'
 
 const RATE_SCALE = 100_000_000n
 const SECONDS_PER_YEAR = 365n * 24n * 60n * 60n
@@ -44,10 +45,9 @@ export function projectedLenderInterest(amount: bigint, pool: PoolBase) {
 }
 
 function tokenValue(amount: bigint, token: TokenSnapshot) {
-  if (!token.price || token.price === '0') return undefined
-  return (
-    (amount * BigInt(token.price) * 10n ** 18n) / 10n ** BigInt(token.decimals)
-  )
+  const price = parseUsdPrice(token.price)
+  if (price === undefined) return undefined
+  return (amount * price) / 10n ** BigInt(token.decimals)
 }
 
 export function estimatedBorrowAmount(
@@ -55,18 +55,11 @@ export function estimatedBorrowAmount(
   pool: PoolBase,
 ) {
   const collateralValue = tokenValue(collateralAmount, pool.collateralToken)
-  if (
-    collateralValue === undefined ||
-    !pool.lendToken.price ||
-    pool.lendToken.price === '0'
-  )
-    return undefined
+  const lendPrice = parseUsdPrice(pool.lendToken.price)
+  if (collateralValue === undefined || lendPrice === undefined) return undefined
   const lendValue =
     (collateralValue * RATE_SCALE) / BigInt(pool.collateralizationRatio)
-  return (
-    (lendValue * 10n ** BigInt(pool.lendToken.decimals)) /
-    (BigInt(pool.lendToken.price) * 10n ** 18n)
-  )
+  return (lendValue * 10n ** BigInt(pool.lendToken.decimals)) / lendPrice
 }
 
 export function depositValidation(input: {

@@ -1,4 +1,5 @@
 import type { IndexedPool, PoolBase, PoolData, PoolState } from './api/types'
+import { parseUsdPrice } from './prices'
 
 export const poolStateLabels: Record<PoolState, string> = {
   '0': 'Funding',
@@ -93,9 +94,9 @@ export function newestPoolUpdate(pool: PoolRecord) {
 }
 
 export function collateralHealth(pool: PoolRecord) {
-  const lendPrice = BigInt(pool.base.lendToken.price || '0')
-  const collateralPrice = BigInt(pool.base.collateralToken.price || '0')
-  if (lendPrice === 0n || collateralPrice === 0n) return undefined
+  const lendPrice = parseUsdPrice(pool.base.lendToken.price)
+  const collateralPrice = parseUsdPrice(pool.base.collateralToken.price)
+  if (lendPrice === undefined || collateralPrice === undefined) return undefined
 
   const lendAmount = BigInt(
     pool.data?.settleAmountLend || pool.base.totalLendDeposited,

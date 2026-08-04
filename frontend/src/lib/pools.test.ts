@@ -27,7 +27,7 @@ function base(
         address: '0x1',
         symbol: index ? 'USDC' : 'PRM',
         logoUrl: '',
-        price: '100000000',
+        price: '0.99978414',
         fee: '0',
         decimals: 18,
       },
@@ -35,7 +35,7 @@ function base(
         address: '0x2',
         symbol: 'WETH',
         logoUrl: '',
-        price: '200000000000',
+        price: '2000.50',
         fee: '0',
         decimals: 18,
       },
@@ -103,7 +103,7 @@ describe('pool domain utilities', () => {
 
   it('derives collateral health only when prices are indexed', () => {
     const [pool] = mergePools([base(0)], [poolData(1)])
-    expect(collateralHealth(pool)).toBe(400)
+    expect(collateralHealth(pool)).toBe(400.1)
     pool.base.lendToken.price = ''
     expect(collateralHealth(pool)).toBeUndefined()
   })
