@@ -9,6 +9,7 @@
     "deploy:local": "hardhat run scripts/deploy-local.ts --network localhost --build-profile production",
     "fund:local": "hardhat run scripts/fund-local-wallet.ts --network localhost --build-profile production",
     "deploy:sepolia": "bash -c 'set -a; if [[ -f .env ]]; then source .env || exit 1; fi; set +a; hardhat run scripts/deploy-sepolia.ts --network sepolia --build-profile production'",
+    "deploy:position-tokens:sepolia": "bash -c 'set -a; if [[ -f .env ]]; then source .env || exit 1; fi; set +a; hardhat run scripts/deploy-position-tokens.ts --network sepolia --build-profile production'",
     "create-pool:api": "hardhat run scripts/create-pool-via-api.ts --network localhost --build-profile production",
     "settle-pool:api": "hardhat run scripts/settle-pool-via-api.ts --network localhost --build-profile production",
     "setup-repay:local": "hardhat run scripts/setup-repay-pool.ts --network localhost --build-profile production",

@@ -127,6 +127,29 @@ The script refuses non-Sepolia RPC networks, validates the separately controlled
 Commit or upload this manifest as a deployment artifact so stdout or an operator's shell history is not the source of truth. Configure every swap direction used by repayment or liquidation.
 This is a testnet integration path, not a claim that Prism's own contracts have received a security audit.
 
+### Deploy pool-specific position tokens on Sepolia
+
+Each Prism pool requires a unique lender and borrower position-token contract.
+Deploy both tokens before preparing the pool-creation proposal:
+
+```bash
+SEPOLIA_RPC_URL=https://... \
+SEPOLIA_PRIVATE_KEY=... \
+PRISM_LENDER_POSITION_TOKEN_NAME="Prism USDC Lender Position Pool 1" \
+PRISM_LENDER_POSITION_TOKEN_SYMBOL="pUSDC-L1" \
+PRISM_BORROWER_POSITION_TOKEN_NAME="Prism WETH Borrower Position Pool 1" \
+PRISM_BORROWER_POSITION_TOKEN_SYMBOL="pWETH-B1" \
+npm run deploy:position-tokens:sepolia
+```
+
+The command also loads `protocol/.env` when present. It refuses non-Sepolia
+networks, reads the PrismPool and multisig addresses from
+`deployments/sepolia.json`, verifies that both contain deployed bytecode,
+authorizes PrismPool as a minter on each new token, and transfers ownership of
+both tokens to the multisig. It prints the two addresses individually and as a
+final JSON object. Record those addresses in the pool proposal and deployment
+records; the script does not modify the shared Sepolia manifest.
+
 ### Authorize an automatic liquidation keeper
 
 `PrismPool.liquidate` can be called by the multisig owner or by one dedicated address configured through `setLiquidator(address)`. The keeper has no pool-administration authority. Because the Sepolia pool is owned by `ThresholdMultiSig`, authorize, replace, or revoke the keeper only through the normal multisig approval and execution flow. The target is the deployed `PrismPool`, the value is zero, and the inner calldata is `PrismPool.interface.encodeFunctionData("setLiquidator", [keeperAddress])`; use `ethers.ZeroAddress` to revoke it. Do not enable the backend scheduler until the multisig transaction has executed and `pool.liquidator()` equals the scheduler signer address.

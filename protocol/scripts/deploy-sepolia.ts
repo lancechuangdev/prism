@@ -13,7 +13,7 @@ type FeedConfig = {
   maxStaleness: number;
 };
 
-type PoolConfig = {
+type UniswapPoolConfig = {
   tokenIn: string;
   tokenOut: string;
   fee: number;
@@ -189,7 +189,9 @@ const feeAddress = requiredAddress("PRISM_FEE_ADDRESS");
 const router = requiredAddress("PRISM_UNISWAP_V3_ROUTER");
 const quoter = requiredAddress("PRISM_UNISWAP_V3_QUOTER");
 const feeds = requiredConfig<FeedConfig>("PRISM_CHAINLINK_FEEDS");
-const pools = requiredConfig<PoolConfig>("PRISM_UNISWAP_V3_POOLS");
+const uniswapPools = requiredConfig<UniswapPoolConfig>(
+  "PRISM_UNISWAP_V3_POOLS",
+);
 
 await Promise.all([
   requireContract("PRISM_UNISWAP_V3_ROUTER", router),
@@ -233,7 +235,7 @@ for (const config of feeds) {
   await oracle.getPrice(token);
 }
 
-for (const config of pools) {
+for (const config of uniswapPools) {
   const tokenIn = ethers.getAddress(config.tokenIn);
   const tokenOut = ethers.getAddress(config.tokenOut);
   if (!Number.isSafeInteger(config.fee) || config.fee <= 0) {
@@ -276,7 +278,7 @@ const deployment = {
   prismPool: await prismPool.getAddress(),
   feeds,
   feedChecks,
-  pools,
+  uniswapPools,
 };
 
 const protocolRoot = path.resolve(
