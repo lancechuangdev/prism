@@ -12,22 +12,57 @@ Prism is an EVM fixed-rate lending protocol with Solidity contracts, a Go backen
 ## Architecture
 
 ```mermaid
-flowchart LR
-  User[User wallet] --> Frontend[React frontend]
-  Frontend --> API[Go API]
-  Frontend -->|reads and signed user transactions| Pool[PrismPool]
-  API --> MySQL[(MySQL)]
-  API --> Redis[(Redis)]
-  Scheduler[Go scheduler] --> MySQL
-  Scheduler --> Redis
-  API -->|eth_call| Pool[PrismPool]
-  Scheduler -->|eth_call and keeper transactions| Pool
-  Pool --> Oracle[ChainlinkOracle]
-  Pool --> Swap[UniswapV3SwapAdapter]
-  Owners[Multisig owners] --> Multisig[ThresholdMultiSig]
-  Multisig --> Pool
-  Multisig --> Oracle
-  Multisig --> Swap
+flowchart TB
+  User([Protocol user])
+  Owners([Multisig owners])
+
+  subgraph Client[Browser]
+    Frontend[React frontend]
+    Wallet[Injected wallet]
+    Frontend <--> Wallet
+  end
+
+  subgraph OffChain[Off-chain services]
+    API[Go API]
+    Scheduler[Go scheduler]
+    MySQL[(MySQL<br/>indexed protocol data)]
+    Redis[(Redis<br/>sessions and price cache)]
+
+    API <--> MySQL
+    API <--> Redis
+    Scheduler -->|periodic index updates| MySQL
+    Scheduler <-->|price-cache refresh| Redis
+  end
+
+  RPC[Ethereum JSON-RPC provider]
+
+  subgraph Ethereum[EVM network]
+    Pool[PrismPool]
+    Multisig[ThresholdMultiSig]
+    Oracle[ChainlinkOracle]
+    Swap[UniswapV3SwapAdapter]
+    Feeds[Chainlink price feeds]
+    Uniswap[Uniswap V3]
+
+    Multisig -->|protocol administration| Pool
+    Multisig -->|configuration| Oracle
+    Multisig -->|configuration| Swap
+    Pool -->|collateral prices| Oracle
+    Oracle -->|latestRoundData| Feeds
+    Pool -->|liquidation swaps| Swap
+    Swap -->|quotes and swaps| Uniswap
+  end
+
+  User --> Frontend
+  Owners --> Frontend
+  Frontend -->|HTTPS queries and proposal preparation| API
+  Frontend -->|live contract reads| RPC
+  Wallet -->|signed user and multisig transactions| RPC
+  API -->|startup sync and contract reads| RPC
+  Scheduler -->|periodic reads and optional keeper transactions| RPC
+  RPC -->|eth_call and transaction submission| Pool
+  RPC -->|eth_call and transaction submission| Multisig
+  RPC -->|gasless price reads| Oracle
 ```
 
 The frontend combines indexed API data with live contract reads and wallet-signed transactions. The backend reads deployed contracts through Ethereum JSON-RPC, while production prices are gasless calls to the deployed `ChainlinkOracle`. When explicitly enabled, the scheduler uses a dedicated, narrowly authorized keeper wallet to submit liquidation transactions; the threshold multisig retains protocol administration.
@@ -64,7 +99,7 @@ prism/
 - Run the backend locally: [`backend/README.md`](./backend/README.md)
 - Run the frontend and view its roadmap: [`frontend/README.md`](./frontend/README.md)
 - Deploy the production AWS stack: [`infra/README.md`](./infra/README.md)
-- Automate backend CI and AWS deployment: [`docs/github-actions-deployment.md`](./docs/github-actions-deployment.md)
+- Configure CI and AWS deployments: [`.github/workflows/github-actions-deployment.md`](./.github/workflows/github-actions-deployment.md)
 
 Follow them in that order for a new environment. The AWS stack consumes addresses from the verified protocol deployment manifest and does not deploy contracts.
 
